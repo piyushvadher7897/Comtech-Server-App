@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "297550998589",
+    "project_id": "server-app-940b2",
+    "storage_bucket": "server-app-940b2.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:297550998589:android:2be582ceb699aec90d0e54",
+        "android_client_info": {
+          "package_name": "com.comtech_server_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBjuYz6gDcOuSewbYkbzuX9s1XY-j4-rXQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
