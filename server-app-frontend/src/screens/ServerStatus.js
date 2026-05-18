@@ -27,6 +27,51 @@ const formatBytes = bytes => {
   return `${normalized.toFixed(decimals)} ${units[unitIndex]}`;
 };
 
+const toBytes = value => {
+  if (value == null) return null;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+
+  const text = value.toString().trim();
+  if (!text) return null;
+
+  const match = text.match(/^([\d.,]+)\s*([kmgtp]?)(i?b)?$/i);
+  if (!match) return null;
+
+  const numberPart = Number.parseFloat(match[1].replace(/,/g, ''));
+  if (!Number.isFinite(numberPart)) return null;
+
+  const unitPrefix = (match[2] || '').toLowerCase();
+  const pow =
+    unitPrefix === ''
+      ? 0
+      : unitPrefix === 'k'
+        ? 1
+        : unitPrefix === 'm'
+          ? 2
+          : unitPrefix === 'g'
+            ? 3
+            : unitPrefix === 't'
+              ? 4
+              : unitPrefix === 'p'
+                ? 5
+                : null;
+  if (pow == null) return null;
+
+  return numberPart * Math.pow(1024, pow);
+};
+
+const bytesLabel = (rawValue, fallbackBytes) => {
+  if (rawValue == null) return formatBytes(fallbackBytes);
+  if (typeof rawValue === 'number') return formatBytes(rawValue);
+  if (typeof rawValue === 'string') {
+    const parsed = toBytes(rawValue);
+    if (parsed == null) return rawValue;
+    if (/[a-zA-Z]/.test(rawValue)) return rawValue;
+    return formatBytes(parsed);
+  }
+  return formatBytes(fallbackBytes);
+};
+
 const getDriveLetterFromDisk = diskData => {
   const candidates = [
     diskData?.filesystem,
@@ -127,28 +172,34 @@ const ServerDetailsModal = ({ visible, onClose, serverData, serverName }) => (
 const DriveDetailsModal = ({ visible, onClose, diskData, title }) => {
   const usePercent = diskData?.usePercent ?? diskData?.use;
   const hasPercent = typeof usePercent === 'number' && Number.isFinite(usePercent);
-  const percentLabel = hasPercent ? `${Math.round(usePercent)}%` : 'N/A';
+  const percent = hasPercent ? Math.max(0, Math.min(100, usePercent)) : null;
+  const percentLabel = hasPercent ? `${Math.round(percent)}%` : 'N/A';
 
   const filesystem = diskData?.filesystem ?? diskData?.fs ?? 'N/A';
   const mount = diskData?.mount ?? diskData?.mounted ?? diskData?.path ?? 'N/A';
   const type = diskData?.type ?? diskData?.fstype ?? diskData?.format ?? 'N/A';
 
-  const explorerTotal = diskData?.explorerTotal ?? null;
-  const explorerFree = diskData?.explorerFree ?? null;
+  const explorerTotalRaw = diskData?.explorerTotal ?? null;
+  const explorerFreeRaw = diskData?.explorerFree ?? null;
   const explorerText = diskData?.explorerText ?? null;
 
-  const sizeBytes = diskData?.size ?? diskData?.total ?? diskData?.capacity;
-  const usedBytes = diskData?.used ?? diskData?.usedBytes;
-  const freeBytes = diskData?.available ?? diskData?.free ?? diskData?.freeBytes;
+  const sizeBytesRaw = diskData?.size ?? diskData?.total ?? diskData?.capacity;
+  const usedBytesRaw = diskData?.used ?? diskData?.usedBytes;
+  const freeBytesRaw = diskData?.available ?? diskData?.free ?? diskData?.freeBytes;
 
-  const totalLabel = explorerTotal ?? formatBytes(sizeBytes);
-  const freeLabel = explorerFree ?? formatBytes(freeBytes);
+  const totalBytes = toBytes(explorerTotalRaw) ?? toBytes(sizeBytesRaw);
+  const freeBytes = toBytes(explorerFreeRaw) ?? toBytes(freeBytesRaw);
+  const usedBytes =
+    toBytes(usedBytesRaw) ?? (totalBytes != null && freeBytes != null ? totalBytes - freeBytes : null);
+
+  const totalLabel = bytesLabel(explorerTotalRaw, totalBytes);
+  const freeLabel = bytesLabel(explorerFreeRaw, freeBytes);
   const usedLabel = formatBytes(usedBytes);
 
   const summary =
     explorerText ??
-    (explorerFree && explorerTotal
-      ? `${explorerFree} free of ${explorerTotal}`
+    (freeLabel !== 'N/A' && totalLabel !== 'N/A'
+      ? `${freeLabel} free of ${totalLabel}`
       : 'N/A');
 
   return (
@@ -346,13 +397,19 @@ console.log("ismarket", ismarket);
         : [];
         console.log("diskList", diskList);
 
- const getDriveByLetter = letter => {
-  const target = letter.toUpperCase();
-  return diskList.find(disk => getDriveLetterFromDisk(disk) === target);
- };
+  const driveEntries = (() => {
+    const map = new Map();
 
-  const cDrive = getDriveByLetter('C');
-  const eDrive = getDriveByLetter('E');
+    for (const disk of diskList) {
+      const letter = getDriveLetterFromDisk(disk);
+      if (!letter) continue;
+      if (!map.has(letter)) map.set(letter, disk);
+    }
+
+    return Array.from(map.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([, disk]) => disk);
+  })();
 
   return (
     <View style={styles.container}>
@@ -420,14 +477,13 @@ console.log("ismarket", ismarket);
             backupDate={null}
             // onPress={() => handleServerPress(ismarket, 'Redis Server Live')}
           />
-          <StorageRow
-            diskData={cDrive}
-            onPress={() => handleDrivePress(cDrive, getDriveTitleFromDisk(cDrive))}
-          />
-          <StorageRow
-            diskData={eDrive}
-            onPress={() => handleDrivePress(eDrive, getDriveTitleFromDisk(eDrive))}
-          />
+          {driveEntries.map((diskData, index) => (
+            <StorageRow
+              key={getDriveLetterFromDisk(diskData) ?? diskData?.mount ?? diskData?.filesystem ?? `disk-${index}`}
+              diskData={diskData}
+              onPress={() => handleDrivePress(diskData, getDriveTitleFromDisk(diskData))}
+            />
+          ))}
         </ScrollView>
 
         <ServerDetailsModal
@@ -490,15 +546,20 @@ function StorageRow({ title, diskData, onPress }) {
   const percent = hasPercent ? Math.max(0, Math.min(100, usePercent)) : null;
   const percentLabel = hasPercent ? `${Math.round(percent)}%` : 'N/A';
 
-  const explorerTotal = diskData?.explorerTotal ?? null;
-  const explorerFree = diskData?.explorerFree ?? null;
+  const explorerTotalRaw = diskData?.explorerTotal ?? null;
+  const explorerFreeRaw = diskData?.explorerFree ?? null;
 
-  const sizeBytes = diskData?.size ?? diskData?.total ?? diskData?.capacity;
-  const usedBytes = diskData?.used ?? diskData?.usedBytes;
-  const freeBytes = diskData?.available ?? diskData?.free ?? diskData?.freeBytes;
+  const sizeBytesRaw = diskData?.size ?? diskData?.total ?? diskData?.capacity;
+  const usedBytesRaw = diskData?.used ?? diskData?.usedBytes;
+  const freeBytesRaw = diskData?.available ?? diskData?.free ?? diskData?.freeBytes;
 
-  const totalLabel = explorerTotal ?? formatBytes(sizeBytes);
-  const freeLabel = explorerFree ?? formatBytes(freeBytes);
+  const totalBytes = toBytes(explorerTotalRaw) ?? toBytes(sizeBytesRaw);
+  const freeBytes = toBytes(explorerFreeRaw) ?? toBytes(freeBytesRaw);
+  const usedBytes =
+    toBytes(usedBytesRaw) ?? (totalBytes != null && freeBytes != null ? totalBytes - freeBytes : null);
+
+  const totalLabel = bytesLabel(explorerTotalRaw, totalBytes);
+  const freeLabel = bytesLabel(explorerFreeRaw, freeBytes);
   const usedLabel = formatBytes(usedBytes);
 
   const filesystem = (diskData?.filesystem ?? diskData?.fs ?? '').toString();
@@ -519,9 +580,9 @@ function StorageRow({ title, diskData, onPress }) {
     <TouchableOpacity style={styles.driveCard} onPress={onPress}>
       <View style={styles.driveHeaderRow}>
         <View style={styles.driveHeaderLeft}>
-          <View style={styles.driveIcon}>
+          {/* <View style={styles.driveIcon}>
             <Text style={styles.driveIconText}>{driveLetter || '?'}</Text>
-          </View>
+          </View> */}
           <View style={styles.driveTitleGroup}>
             <Text style={styles.driveTitle}>{resolvedTitle}</Text>
             <Text style={styles.driveSubtitle} numberOfLines={1}>
@@ -544,29 +605,20 @@ function StorageRow({ title, diskData, onPress }) {
         <View style={styles.driveUsedFreeItem}>
           <View style={[styles.driveDot, { backgroundColor: barColor }]} />
           <Text style={styles.driveUsedFreeText}>
-            Used — {usedLabel}
+            Used:{usedLabel}
           </Text>
         </View>
         <View style={styles.driveUsedFreeItem}>
           <View style={[styles.driveDot, { backgroundColor: '#D9D9D9' }]} />
           <Text style={styles.driveUsedFreeText}>
-            Free — {freeLabel}
+            Free:{freeLabel} 
           </Text>
         </View>
-      </View>
-
-      <View style={styles.driveStatsRow}>
-        <View style={styles.driveStatCard}>
-          <Text style={styles.driveStatValue}>{usedLabel}</Text>
-          <Text style={styles.driveStatLabel}>Used</Text>
-        </View>
-        <View style={styles.driveStatCard}>
-          <Text style={styles.driveStatValue}>{freeLabel}</Text>
-          <Text style={styles.driveStatLabel}>Free</Text>
-        </View>
-        <View style={styles.driveStatCard}>
-          <Text style={styles.driveStatValue}>{totalLabel}</Text>
-          <Text style={styles.driveStatLabel}>Total</Text>
+        <View style={styles.driveUsedFreeItem}>
+          <View style={[styles.driveDot, { backgroundColor: '#D9D9D9' }]} />
+          <Text style={styles.driveUsedFreeText}>
+            Total:{totalLabel}
+          </Text>
         </View>
       </View>
     </TouchableOpacity>
@@ -829,7 +881,8 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    marginRight: 8,
+    marginRight: 2,
+    marginLeft: 2,
   },
   driveUsedFreeText: {
     color: '#555',
