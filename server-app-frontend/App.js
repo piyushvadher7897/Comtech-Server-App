@@ -134,6 +134,7 @@ import { AlertMessage } from './src/utils/AlertMessage';
 import messaging from '@react-native-firebase/messaging';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 const Stack = createNativeStackNavigator();
 
@@ -206,6 +207,7 @@ const App = () => {
   }, [lastMessageId]);
 
   return (
+    <SafeAreaProvider>
     <View style={{ flex: 1 }}>
       {isSplashVisible ? (
         <SplashScreen onAnimationComplete={() => setIsSplashVisible(false)} />
@@ -234,6 +236,7 @@ const App = () => {
         </NavigationContainer>
       )}
     </View>
+    </SafeAreaProvider>
   );
 };
 

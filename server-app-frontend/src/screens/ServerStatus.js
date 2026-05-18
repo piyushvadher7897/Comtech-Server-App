@@ -2,16 +2,19 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
+  Image,
   StyleSheet,
   Animated,
   Modal,
   TouchableOpacity,
   ScrollView,
-  Pressable
+  Pressable,
 } from 'react-native';
 import { formatUptime } from '../utils/utils';
-import DeviceInfo from 'react-native-device-info';
 import { Shoket_URL } from '../global/constant';
+import { colors, cardShadow } from '../theme/theme';
+import { getServerIconType, ServerIconBox } from '../components/ServerIcons';
+import StatusBadge from '../components/StatusBadge';
 
 const formatBytes = bytes => {
   const value = Number(bytes);
@@ -423,28 +426,24 @@ console.log("ismarket", ismarket);
           </View>
         )}
 
-        <View style={styles.headerContainer}>
-          <View style={{ 
-            flexDirection: 'row', 
-            alignItems: 'center',
-            flex: 1,
-            justifyContent: 'center'
-          }}>
-            <Animated.View
-              style={[
-                styles.blinkDot,
-                { backgroundColor: isConnected ? 'red' : '', opacity: blinkAnim }
-              ]}
-            />
-            <Text style={styles.header}>Server</Text>
+        <View style={styles.sectionHeader}>
+          <View style={styles.sectionLine} />
+          <Image
+            source={require('../../asset/images/APP_ICON.png')}
+            style={styles.sectionLogo}
+          />
+          <View style={styles.sectionTitleWrap}>
+            {!isConnected && (
+              <Animated.View
+                style={[styles.connectionDot, { opacity: blinkAnim }]}
+              />
+            )}
+            <Text style={styles.sectionTitle}>SERVER STATUS</Text>
           </View>
-          <Text style={[styles.header, { marginEnd: 10 }]}>Status</Text>
+          <View style={styles.sectionLine} />
         </View>
 
-        <ScrollView
-          contentContainerStyle={styles.serversWrapper}
-          showsVerticalScrollIndicator={false}
-        >
+        <View style={styles.serversWrapper}>
           <ServerRow
             title="Whitelabel Live"
             serverData={{...whitelabel,"backupDate":status?.wlModifiedAt}}
@@ -484,7 +483,7 @@ console.log("ismarket", ismarket);
               onPress={() => handleDrivePress(diskData, getDriveTitleFromDisk(diskData))}
             />
           ))}
-        </ScrollView>
+        </View>
 
         <ServerDetailsModal
           visible={modalVisible}
@@ -504,41 +503,41 @@ console.log("ismarket", ismarket);
   );
 };
 
-const ServerRow = ({ title, serverData, backupDate, onPress }) => (
-  <TouchableOpacity style={styles.serverContainer} onPress={onPress}>
-    <View style={[styles.serverInfo, { alignSelf: 'center' }]}>
-      <Text style={styles.serverName}>{title}</Text>
-      {serverData?.uptime != null && (
-        <Text style={styles.serverType}>
-          Uptime: {formatUptime(serverData.uptime)}
-        </Text>
-      )}
-      {serverData?.backupDate && (
-        <Text style={[styles.backupInfo,{fontSize: 10}]}>
-          Last Backup: {serverData?.backupDate}
-        </Text>
-      )}
-    </View>
-    <View
-      style={[
-        styles.statusIndicator,
-        {
-          backgroundColor:
-            serverData?.status === 'online' || serverData?.status === 'up' || serverData?.status === true
-              ? '#008000'
-              : '#ff0000',
-          alignSelf: 'center'
-        }
-      ]}
-    >
-      <Text style={styles.statusText}>
-        {serverData?.status === 'online' || serverData?.status === 'up'
-          ? 'ON'
-          : 'OFF'}
-      </Text>
-    </View>
-  </TouchableOpacity>
-);
+const isServerOn = serverData =>
+  serverData?.status === 'online' ||
+  serverData?.status === 'up' ||
+  serverData?.status === true;
+
+const ServerRow = ({ title, serverData, onPress }) => {
+  const on = isServerOn(serverData);
+  const iconType = getServerIconType(title);
+
+  return (
+    <TouchableOpacity
+      style={styles.serverContainer}
+      onPress={onPress}
+      activeOpacity={onPress ? 0.75 : 1}
+      disabled={!onPress}>
+      <View style={styles.serverIconWrap}>
+        <ServerIconBox type={iconType} size={22} />
+      </View>
+      <View style={styles.serverInfo}>
+        <Text style={styles.serverName}>{title}</Text>
+        {serverData?.uptime != null && (
+          <Text style={styles.serverMeta}>
+            Uptime: {formatUptime(serverData.uptime)}
+          </Text>
+        )}
+        {serverData?.backupDate ? (
+          <Text style={styles.backupInfo} numberOfLines={1}>
+            Last Backup: {serverData.backupDate}
+          </Text>
+        ) : null}
+      </View>
+      <StatusBadge on={on} />
+    </TouchableOpacity>
+  );
+};
 
 function StorageRow({ title, diskData, onPress }) {
   const usePercent = diskData?.usePercent ?? diskData?.use;
@@ -568,21 +567,26 @@ function StorageRow({ title, diskData, onPress }) {
   const driveLetter = getDriveLetterFromDisk(diskData) ?? '';
   const resolvedTitle = title ?? getDriveTitleFromDisk(diskData);
 
-  const baseColor = driveLetter === 'C' ? '#00A3FF' : '#5BD100';
-  const barColor = !hasPercent ? '#999999' : percent >= 80 ? '#FF0000' : baseColor;
-
   const subtitleParts = [];
   if (type) subtitleParts.push(type);
   if (totalLabel && totalLabel !== 'N/A') subtitleParts.push(totalLabel);
   const subtitle = subtitleParts.length ? subtitleParts.join(' • ') : 'Storage';
 
+  const barColorThemed = !hasPercent
+    ? colors.textDim
+    : percent >= 80
+      ? colors.off
+      : driveLetter === 'C'
+        ? '#38BDF8'
+        : colors.on;
+
   return (
-    <TouchableOpacity style={styles.driveCard} onPress={onPress}>
+    <TouchableOpacity style={styles.driveCard} onPress={onPress} activeOpacity={0.75}>
       <View style={styles.driveHeaderRow}>
         <View style={styles.driveHeaderLeft}>
-          {/* <View style={styles.driveIcon}>
-            <Text style={styles.driveIconText}>{driveLetter || '?'}</Text>
-          </View> */}
+          <View style={styles.serverIconWrap}>
+            <ServerIconBox type="storage" size={20} />
+          </View>
           <View style={styles.driveTitleGroup}>
             <Text style={styles.driveTitle}>{resolvedTitle}</Text>
             <Text style={styles.driveSubtitle} numberOfLines={1}>
@@ -590,35 +594,38 @@ function StorageRow({ title, diskData, onPress }) {
             </Text>
           </View>
         </View>
-        <Text style={[styles.drivePercent, { color: hasPercent ? barColor : '#999999' }]}>
+        <Text
+          style={[
+            styles.drivePercent,
+            { color: hasPercent ? barColorThemed : colors.textDim },
+          ]}>
           {percentLabel}
         </Text>
       </View>
 
       <View style={styles.driveProgressTrack}>
         {hasPercent && (
-          <View style={[styles.driveProgressFill, { width: `${percent}%`, backgroundColor: barColor }]} />
+          <View
+            style={[
+              styles.driveProgressFill,
+              { width: `${percent}%`, backgroundColor: barColorThemed },
+            ]}
+          />
         )}
       </View>
 
       <View style={styles.driveUsedFreeRow}>
         <View style={styles.driveUsedFreeItem}>
-          <View style={[styles.driveDot, { backgroundColor: barColor }]} />
-          <Text style={styles.driveUsedFreeText}>
-            Used:{usedLabel}
-          </Text>
+          <View style={[styles.driveDot, { backgroundColor: barColorThemed }]} />
+          <Text style={styles.driveUsedFreeText}>Used: {usedLabel}</Text>
         </View>
         <View style={styles.driveUsedFreeItem}>
-          <View style={[styles.driveDot, { backgroundColor: '#D9D9D9' }]} />
-          <Text style={styles.driveUsedFreeText}>
-            Free:{freeLabel} 
-          </Text>
+          <View style={[styles.driveDot, { backgroundColor: colors.textDim }]} />
+          <Text style={styles.driveUsedFreeText}>Free: {freeLabel}</Text>
         </View>
         <View style={styles.driveUsedFreeItem}>
-          <View style={[styles.driveDot, { backgroundColor: '#D9D9D9' }]} />
-          <Text style={styles.driveUsedFreeText}>
-            Total:{totalLabel}
-          </Text>
+          <View style={[styles.driveDot, { backgroundColor: colors.goldMuted }]} />
+          <Text style={styles.driveUsedFreeText}>Total: {totalLabel}</Text>
         </View>
       </View>
     </TouchableOpacity>
@@ -628,117 +635,119 @@ function StorageRow({ title, diskData, onPress }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 20,
+    paddingHorizontal: 0,
+    paddingTop: 4,
   },
   contentWrapper: {
     flex: 1,
-    paddingVertical: 20,
+    paddingVertical: 8,
   },
   errorContainer: {
     marginBottom: 10,
     padding: 10,
-    backgroundColor: '#ffcccc',
-    borderRadius: 8,
+    backgroundColor: colors.errorBg,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(220, 38, 38, 0.4)',
   },
- errorText: {
-    color: '#b00020',
-    fontWeight: 'bold',
+  errorText: {
+    color: colors.errorText,
+    fontWeight: '600',
     textAlign: 'center',
+    fontSize: 13,
   },
-    navigateContainer: {
+  navigateContainer: {
     marginBottom: 10,
     padding: 10,
-    backgroundColor: '#ffffff',
-    borderRadius: 8,
+    backgroundColor: colors.cardBg,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.goldBorder,
   },
-   navigateText: {
-    color: '#023020',
+  navigateText: {
+    color: colors.gold,
     fontWeight: 'bold',
     textAlign: 'center',
   },
- 
-  headerContainer: {
+  sectionHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 30,
+    marginBottom: 16,
+    marginTop: 4,
+    gap: 10,
+    backgroundColor: 'rgba(8, 42, 42, 0.92)',
+  },
+  sectionLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.goldBorder,
+  },
+  sectionLogo: {
+    width: 28,
+    height: 28,
+    resizeMode: 'contain',
+  },
+  sectionTitleWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  sectionTitle: {
+    color: colors.textPrimary,
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 1.5,
+  },
+  connectionDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.off,
   },
   serversWrapper: {
-    paddingVertical: 10,
-    paddingBottom: 10,
-  },
-  header: {
-    color: 'white',
-    fontSize: 24,
-    fontWeight: 'bold',
-    textAlign: 'center',
+    paddingBottom: 8,
+    gap: 10,
   },
   serverContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    backgroundColor: colors.cardBg,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.goldBorder,
+    padding: 12,
     gap: 10,
-    borderRadius: 10,
-    marginBottom: 20,
-    width: '100%',
+    ...cardShadow,
+  },
+  serverIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.goldBorder,
+    backgroundColor: 'rgba(212, 175, 55, 0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   serverInfo: {
     flex: 1,
-    backgroundColor: 'rgb(255, 255, 255)',
-    padding: 15,
-    borderRadius: 10,
-    height: 90,
-    width: "65%",
     justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-  },
-  blinkDot: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    marginRight: 8,
-    marginBottom: 4,
+    paddingRight: 4,
   },
   serverName: {
-    color: 'black',
-    fontSize: 17,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    alignSelf: 'center',
+    color: colors.textPrimary,
+    fontSize: 15,
+    fontWeight: '700',
   },
-  serverType: {
-    color: 'rgb(8, 8, 8)',
-    fontSize: 14,
-    marginTop: 5,
-    textAlign: 'center',
-  },
-  backupInfo: {
-    color: '#666',
+  serverMeta: {
+    color: colors.textMuted,
     fontSize: 12,
     marginTop: 3,
-    textAlign: 'center',
   },
-  statusIndicator: {
-    borderRadius: 15,
-    minWidth: 70,
-    height: 70,
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: "30%",
-    alignSelf: 'center'
-  },
-  statusText: {
-    color: 'white',
-    fontWeight: 'bold',
-    fontSize: 16,
+  backupInfo: {
+    color: colors.textDim,
+    fontSize: 10,
+    marginTop: 3,
   },
   // Modal styles
   modalOverlay: {
@@ -749,26 +758,21 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   modalContent: {
-    backgroundColor: 'white',
+    backgroundColor: colors.modalBg,
     borderRadius: 20,
     padding: 20,
     width: '90%',
     maxHeight: '80%',
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
+    borderWidth: 1,
+    borderColor: colors.goldBorder,
+    ...cardShadow,
   },
   modalTitle: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: 'bold',
     textAlign: 'center',
     marginBottom: 20,
-    color: '#023020',
+    color: colors.goldLight,
   },
   detailRow: {
     flexDirection: 'row',
@@ -776,41 +780,40 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: colors.goldBorder,
   },
   detailLabel: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
-    color: '#666',
+    color: colors.textMuted,
   },
   detailValue: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '500',
-    color: '#333',
+    color: colors.textPrimary,
   },
   closeButton: {
-    backgroundColor: '#023020',
-    padding: 15,
-    borderRadius: 10,
+    backgroundColor: 'rgba(212, 175, 55, 0.15)',
+    borderWidth: 1,
+    borderColor: colors.goldBorder,
+    padding: 14,
+    borderRadius: 12,
     marginTop: 20,
     alignItems: 'center',
   },
   closeButtonText: {
-    color: 'white',
-    fontSize: 16,
+    color: colors.goldLight,
+    fontSize: 15,
     fontWeight: 'bold',
   },
   driveCard: {
-    backgroundColor: 'rgb(255, 255, 255)',
-    borderRadius: 14,
+    backgroundColor: colors.cardBg,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.goldBorder,
     padding: 14,
-    marginBottom: 20,
     width: '100%',
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
+    ...cardShadow,
   },
   driveHeaderRow: {
     flexDirection: 'row',
@@ -823,43 +826,30 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingRight: 10,
   },
-  driveIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    backgroundColor: '#F1F1F1',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  driveIconText: {
-    color: '#333',
-    fontWeight: '800',
-    fontSize: 16,
-  },
   driveTitleGroup: {
     marginLeft: 10,
     flex: 1,
   },
   driveTitle: {
-    color: '#000',
-    fontSize: 16,
-    fontWeight: '800',
+    color: colors.textPrimary,
+    fontSize: 15,
+    fontWeight: '700',
   },
   driveSubtitle: {
     marginTop: 2,
-    color: '#666',
-    fontSize: 12,
-    fontWeight: '600',
+    color: colors.textMuted,
+    fontSize: 11,
+    fontWeight: '500',
   },
   drivePercent: {
-    fontSize: 18,
-    fontWeight: '900',
+    fontSize: 17,
+    fontWeight: '800',
   },
   driveProgressTrack: {
     marginTop: 12,
-    height: 10,
+    height: 8,
     borderRadius: 8,
-    backgroundColor: '#1D1D1D',
+    backgroundColor: 'rgba(0, 0, 0, 0.35)',
     overflow: 'hidden',
   },
   driveProgressFill: {
@@ -885,9 +875,9 @@ const styles = StyleSheet.create({
     marginLeft: 2,
   },
   driveUsedFreeText: {
-    color: '#555',
-    fontSize: 12,
-    fontWeight: '600',
+    color: colors.textMuted,
+    fontSize: 10,
+    fontWeight: '500',
   },
   driveStatsRow: {
     marginTop: 12,
