@@ -125,13 +125,16 @@
 
 
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { View } from 'react-native';
 import SplashScreen from './src/screens/SplashScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import CronData from './src/screens/CronData';
 import { AlertMessage } from './src/utils/AlertMessage';
-import messaging from '@react-native-firebase/messaging';
+import {
+  initializeFirebaseMessaging,
+  setupForegroundNotificationHandlers,
+} from './src/services/firebaseMessaging';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -140,35 +143,28 @@ const Stack = createNativeStackNavigator();
 
 const App = () => {
   const [isSplashVisible, setIsSplashVisible] = React.useState(true);
-  const [lastMessageId, setLastMessageId] = React.useState(null);
-
-  // 🔔 Request permission for notifications
-  const requestUserPermission = async () => {
-    try {
-      const authStatus = await messaging().requestPermission();
-      const enabled =
-        authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
-        authStatus === messaging.AuthorizationStatus.PROVISIONAL;
-
-      if (enabled) {
-        console.log('Authorization status:', authStatus);
-        const token = await messaging().getToken();
-        console.log('FCM Token:', token);
-      }
-    } catch (error) {
-      console.log('Permission request error:', error);
-    }
-  };
+  const lastMessageIdRef = useRef(null);
 
   useEffect(() => {
-    requestUserPermission();
+    let cleanupMessaging = () => {};
 
-    const unsubscribe = messaging().onMessage(async remoteMessage => {
-      console.log('Received foreground message:', remoteMessage);
-      if (remoteMessage.messageId === lastMessageId) return;
+    const setup = async () => {
+      cleanupMessaging = await initializeFirebaseMessaging();
+    };
 
-      setLastMessageId(remoteMessage.messageId);
-      let notify = remoteMessage.notification;
+    setup();
+
+    const unsubscribe = setupForegroundNotificationHandlers(remoteMessage => {
+      if (remoteMessage.messageId === lastMessageIdRef.current) {
+        return;
+      }
+
+      lastMessageIdRef.current = remoteMessage.messageId;
+      const notify = remoteMessage.notification;
+      if (!notify) {
+        return;
+      }
+
       AlertMessage({
         title: notify.title,
         message: notify.body,
@@ -177,34 +173,11 @@ const App = () => {
       });
     });
 
-    messaging().onNotificationOpenedApp(remoteMessage => {
-      console.log('Notification opened from background:', remoteMessage);
-      if (remoteMessage.notification) {
-        AlertMessage({
-          title: remoteMessage.notification.title,
-          message: remoteMessage.notification.body,
-          okText: 'Ok',
-          okButton: () => {},
-        });
-      }
-    });
-
-    messaging()
-      .getInitialNotification()
-      .then(remoteMessage => {
-        if (remoteMessage) {
-          console.log('Notification opened app from quit state:', remoteMessage);
-          AlertMessage({
-            title: remoteMessage.notification.title,
-            message: remoteMessage.notification.body,
-            okText: 'Ok',
-            okButton: () => {},
-          });
-        }
-      });
-
-    return unsubscribe;
-  }, [lastMessageId]);
+    return () => {
+      cleanupMessaging();
+      unsubscribe();
+    };
+  }, []);
 
   return (
     <SafeAreaProvider>
