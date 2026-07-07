@@ -2,8 +2,9 @@ import messaging from '@react-native-firebase/messaging';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import {Platform} from 'react-native';
+import {SERVER_APP_URL} from '../global/constant';
 
-const API_URL = 'http://78.129.235.51:5080';
+const API_URL = SERVER_APP_URL;
 
 const requestUserPermission = async () => {
   if (Platform.OS !== 'ios') {

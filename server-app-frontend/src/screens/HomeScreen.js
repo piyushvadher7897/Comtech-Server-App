@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ServerStatus from '../screens/ServerStatus';
-import { APP_URL } from '../global/constant';
+import { SERVER_APP_URL } from '../global/constant';
 import { io } from 'socket.io-client';
 import GoldCard, { GoldLabel, GoldMeta, GoldValue } from '../components/GoldCard';
 import { GoldBarsIcon, BalanceScaleIcon, PriceIconBadge } from '../components/PriceIcons';
@@ -26,7 +26,7 @@ import {
   formatPriceUpdatedLabel,
 } from '../utils/priceDisplay';
 
-const socket = io(APP_URL);
+const socket = io(SERVER_APP_URL);
 
 const DifferenceCard = ({ value, variant }) => {
   const isLoading = variant === 'loading';
@@ -135,7 +135,7 @@ const HomeScreen = ({ navigation }) => {
         <ScrollView
           contentContainerStyle={[
             styles.scrollContainer,
-            { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 24 },
+            { paddingTop: insets.top + 8, paddingBottom: 16 },
           ]}
           showsVerticalScrollIndicator={false}
           refreshControl={

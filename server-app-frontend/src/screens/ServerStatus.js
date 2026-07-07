@@ -285,6 +285,7 @@ console.log("ismarket", ismarket);
   const [driveModalVisible, setDriveModalVisible] = useState(false);
   const [selectedDrive, setSelectedDrive] = useState(null);
   const wsRef = useRef(null);
+  const reconnectTimerRef = useRef(null);
   const blinkAnim = useRef(new Animated.Value(1)).current;
 
   const formatBackupDate = date => {
@@ -326,6 +327,11 @@ console.log("ismarket", ismarket);
   }, [blinkAnim]);
 
   const connectWebSocket = () => {
+    if (reconnectTimerRef.current) {
+      clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
+
     try {
       const ws = new WebSocket(SERVER_URL);
       wsRef.current = ws;
@@ -333,7 +339,7 @@ console.log("ismarket", ismarket);
       ws.onopen = () => {
         setIsConnected(true);
         setError(null);
-        console.log(JSON.stringify({ type: 'get_status' }))
+        console.log(JSON.stringify({ type: 'get_status' }));
         ws.send(JSON.stringify({ type: 'get_status' }));
       };
 
@@ -356,13 +362,18 @@ console.log("ismarket", ismarket);
       };
 
       ws.onerror = () => {
-        setError('Connection error');
         setIsConnected(false);
       };
 
       ws.onclose = () => {
         setIsConnected(false);
-        setTimeout(connectWebSocket, 5000);
+        if (!reconnectTimerRef.current) {
+          setError('Connection error');
+          reconnectTimerRef.current = setTimeout(() => {
+            reconnectTimerRef.current = null;
+            connectWebSocket();
+          }, 5000);
+        }
       };
     } catch {
       setError('Failed to connect to server');
@@ -372,7 +383,12 @@ console.log("ismarket", ismarket);
 
   useEffect(() => {
     connectWebSocket();
-    return () => wsRef.current?.close();
+    return () => {
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current);
+      }
+      wsRef.current?.close();
+    };
   }, []);
 
   useEffect(() => {
