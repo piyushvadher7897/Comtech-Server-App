@@ -24,6 +24,7 @@ import {
   getWebAdminDateRange,
   DEPOSIT_LIST_PAGE_SIZE,
   submitDepositPending,
+  isMissingDepositProfile,
 } from '../../services/adminApi';
 import {
   ADMIN_SESSION_KEY,
@@ -371,11 +372,16 @@ export const AdminProvider = ({ children }) => {
   const getDepositById = useCallback(
     async depositId => {
       const cached = deposits.find(d => d.id === depositId);
-      if (cached) return cached;
+      if (cached && !isMissingDepositProfile(cached)) return cached;
       try {
-        return await fetchDepositDetail(depositId);
+        const detail = await fetchDepositDetail(depositId);
+        if (!detail) return cached || null;
+        if (cached && isMissingDepositProfile(detail) && !isMissingDepositProfile(cached)) {
+          return cached;
+        }
+        return detail;
       } catch {
-        return null;
+        return cached || null;
       }
     },
     [deposits],
@@ -403,16 +409,31 @@ export const AdminProvider = ({ children }) => {
         const updated = record?._id || record?.status
           ? mapBackendDeposit(
               workflowStatus ? { ...record, workflowStatus } : record,
+              deposit._raw?.user,
             )
           : null;
 
         if (updated) {
+          const amountsLookConverted =
+            updated.amountUsd > 0 &&
+            updated.amountAed > 0 &&
+            updated.amountUsd < updated.amountAed;
+          const enriched = {
+            ...deposit,
+            ...updated,
+            userName: isMissingDepositProfile(updated) ? deposit.userName : updated.userName,
+            email: updated.email || deposit.email,
+            amountAed: amountsLookConverted ? updated.amountAed : deposit.amountAed,
+            amountUsd: amountsLookConverted ? updated.amountUsd : deposit.amountUsd,
+          };
           setDeposits(prev =>
-            prev.map(d => (d.id === deposit.id ? { ...d, ...updated } : d)),
+            prev.map(d => (d.id === deposit.id ? enriched : d)),
           );
+          await loadAdminData({ silent: true, force: true });
+          return { success: true, data: enriched, stage: isManagerStage ? 'manager' : 'admin' };
         }
         await loadAdminData({ silent: true, force: true });
-        return { success: true, data: updated, stage: isManagerStage ? 'manager' : 'admin' };
+        return { success: true, data: deposit, stage: isManagerStage ? 'manager' : 'admin' };
       } catch (err) {
         const message = formatApiError(err) || 'Action failed';
         setError(message);

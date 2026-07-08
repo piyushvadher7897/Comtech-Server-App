@@ -6,7 +6,7 @@ import { AdminScreenLayout } from '../components/AdminInput';
 import GoldButton from '../components/GoldButton';
 import { CheckCircleIcon, Sparkles } from '../components/AdminIcons';
 import { useAdmin } from '../context/AdminContext';
-import { resetToAdminDashboard } from '../utils/navigation';
+import { navigateToAdminScreen, resetToAdminDashboard } from '../utils/navigation';
 import { getDisplayPaymentId, getDisplayReferenceNumber } from '../../services/adminApi';
 import { adminColors } from '../theme/adminTheme';
 import { APPROVAL_STAGE_LABELS } from '../constants/depositStatus';
@@ -26,8 +26,8 @@ const formatDate = iso => {
 const ApprovalSuccessScreen = ({ navigation, route }) => {
   const insets = useSafeAreaInsets();
   const { deposits, loadAdminData } = useAdmin();
-  const { depositId, action, stage } = route.params || {};
-  const deposit = deposits.find(d => d.id === depositId);
+  const { depositId, deposit: paramDeposit, action, stage } = route.params || {};
+  const deposit = paramDeposit || deposits.find(d => d.id === depositId);
 
   const goToDashboard = useCallback(async () => {
     await loadAdminData({ silent: true, force: true });
@@ -159,7 +159,10 @@ const ApprovalSuccessScreen = ({ navigation, route }) => {
           title="VIEW DETAILS"
           variant="outline"
           onPress={() =>
-            navigation.navigate('DepositDetail', { depositId: deposit?.id })
+            navigateToAdminScreen(navigation, 'DepositDetail', {
+              depositId: depositId || deposit?.id,
+              deposit,
+            })
           }
           style={styles.btnOutline}
         />

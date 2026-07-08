@@ -7,7 +7,7 @@ const SERVER_SOCKET_PROD = 'ws://78.129.235.51:5080';
 
 // ─── Admin Side tab (fund deposit approval — /api/appadmin/*) ───
 const ADMIN_PROD_URL = 'https://appapi.comtechgold.com';
-const ADMIN_LOCAL_PORT = 5055; // match cgoldBack_new_transform/envs/local.env PORT
+const ADMIN_LOCAL_PORT = 5056; // match cgoldBack_new_transform/envs/local.env PORT
 
 // Set Mac LAN IP when testing admin on a physical phone (e.g. '192.168.1.42')
 const ADMIN_LOCAL_HOST = null;
@@ -17,7 +17,7 @@ const getLocalAdminUrl = () => {
     return `http://${ADMIN_LOCAL_HOST}:${ADMIN_LOCAL_PORT}`;
   }
   if (Platform.OS === 'android') {
-    return `http://192.168.1.8:${ADMIN_LOCAL_PORT}`;
+    return `http://78.129.235.52:${ADMIN_LOCAL_PORT}`;
   }
   return `http://localhost:${ADMIN_LOCAL_PORT}`;
 };

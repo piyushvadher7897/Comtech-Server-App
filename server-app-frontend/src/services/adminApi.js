@@ -48,9 +48,66 @@ export const mapWorkflowStatus = record => {
   return 'pending_manager';
 };
 
+const isPopulatedUser = candidate => {
+  if (!candidate || typeof candidate !== 'object') return false;
+  return Boolean(
+    candidate.firstName || candidate.lastName || candidate.email || candidate.name,
+  );
+};
+
+const resolveDepositUser = (doc, user) => {
+  const record = doc?._raw || doc;
+  if (isPopulatedUser(user)) return user;
+  if (isPopulatedUser(record?.user)) return record.user;
+  if (isPopulatedUser(doc?.user)) return doc.user;
+  if (isPopulatedUser(record?.userID)) return record.userID;
+  return null;
+};
+
+const formatDepositUserName = (userRecord, doc, record) => {
+  const existing = doc?.userName || record?.userName;
+  if (existing && existing !== '—') return existing;
+  if (!userRecord) return '—';
+  return (
+    `${userRecord.firstName || ''} ${userRecord.lastName || ''}`.trim() ||
+    userRecord.name ||
+    userRecord.email ||
+    '—'
+  );
+};
+
+/** Web admin: DB amount is AED; USD = amount / buyConversion (usdAmount from list aggregate). */
+const resolveDepositAmounts = (doc, record) => {
+  const currency = String(record?.currency || doc?.currency || 'AED').toUpperCase();
+  const aedAmount = Number(record?.amount ?? doc?.amountAed ?? record?.amountAed ?? 0);
+  const storedUsd =
+    record?.usdAmount != null && record.usdAmount !== ''
+      ? Number(record.usdAmount)
+      : null;
+  const mappedUsd =
+    doc?.amountUsd != null && doc.amountUsd !== '' ? Number(doc.amountUsd) : null;
+  const mappedAed =
+    doc?.amountAed != null && doc.amountAed !== '' ? Number(doc.amountAed) : null;
+
+  if (currency === 'USD') {
+    const usd = storedUsd ?? mappedUsd ?? aedAmount;
+    return {
+      amountAed: mappedAed ?? aedAmount,
+      amountUsd: usd,
+    };
+  }
+
+  const amountAed = mappedAed ?? aedAmount;
+  const amountUsd = storedUsd ?? mappedUsd ?? 0;
+  return { amountAed, amountUsd };
+};
+
+export const isMissingDepositProfile = deposit =>
+  !deposit?.userName || deposit.userName === '—';
+
 export const mapBackendDeposit = (doc, user) => {
   const record = doc?._raw || doc;
-  const u = user || record.user || record.userID;
+  const u = resolveDepositUser(doc, user);
   const dbStatus = doc?.dbStatus || record.status || '';
   const approveStatus = doc?.approveStatus ?? record.approveStatus ?? 'pending';
   const workflowStatus = mapWorkflowStatus({ ...record, status: dbStatus, approveStatus });
@@ -128,6 +185,7 @@ export const mapBackendDeposit = (doc, user) => {
 
   const adminApproval = resolveAdminApproval(doc?.adminApproval ? doc : record);
   const superAdminApproval = resolveSuperAdminApproval(doc?.superAdminApproval ? doc : record);
+  const { amountAed, amountUsd } = resolveDepositAmounts(doc, record);
 
   const managerActivity = activity.find(a => {
     const action = String(a?.action || '').toLowerCase();
@@ -162,14 +220,12 @@ export const mapBackendDeposit = (doc, user) => {
 
   return {
     id: String(record._id || record.id),
-    userName: u
-      ? `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email || '—'
-      : record.userName || '—',
-    email: u?.email || record.email || '',
+    userName: formatDepositUserName(u, doc, record),
+    email: u?.email || doc?.email || record.email || '',
     referenceNumber: record.refNo ?? '',
     createdAt: record.createdAt || record.date,
-    amountAed: Number(record.amount || record.amountAed || 0),
-    amountUsd: Number(record.usdAmount || record.amountUsd || record.amount || 0),
+    amountAed,
+    amountUsd,
     currency: record.currency || 'AED',
     paymentMethod: record.paymentVia || record.paymentMethod || '',
     paymentId: String(record._id || record.id || ''),
@@ -366,7 +422,9 @@ export const fetchDepositStats = async () => {
 
 export const fetchDepositDetail = async id => {
   const { data } = await api.post(`${APP_ADMIN_BASE}/funddeposit/view`, { id });
-  return mapBackendDeposit(data.data || data, data.data?.userID);
+  const payload = data.data || data;
+  const user = payload?.userID || payload?._raw?.user || payload?.user;
+  return mapBackendDeposit(payload, user);
 };
 
 /** Map Take Action UI labels to workflow API actions (same logic as fundDepositWorkflowService) */

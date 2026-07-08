@@ -22,7 +22,7 @@ import {
   APPROVAL_STAGE_LABELS,
 } from '../constants/depositStatus';
 import { adminColors, adminShadow, getInitials } from '../theme/adminTheme';
-import { isEmptyDepositReference, getDisplayPaymentId, getDisplayReferenceNumber, getEditableReferenceNumber } from '../../services/adminApi';
+import { isEmptyDepositReference, getDisplayPaymentId, getDisplayReferenceNumber, getEditableReferenceNumber, isMissingDepositProfile } from '../../services/adminApi';
 
 const MANAGER_OPTIONS = [
   { id: 'Approved', label: 'Approve', hint: `${APPROVAL_STAGE_LABELS.ADMIN} approval for this deposit` },
@@ -69,7 +69,7 @@ const TakeActionScreen = ({ navigation, route }) => {
   React.useEffect(() => {
     let active = true;
     (async () => {
-      if (cached) {
+      if (cached && !isMissingDepositProfile(cached)) {
         setDeposit(cached);
         setLoading(false);
         return;
@@ -77,7 +77,7 @@ const TakeActionScreen = ({ navigation, route }) => {
       setLoading(true);
       const detail = await getDepositById(depositId);
       if (active) {
-        setDeposit(detail);
+        setDeposit(detail || cached || null);
         setLoading(false);
       }
     })();
@@ -188,6 +188,7 @@ const TakeActionScreen = ({ navigation, route }) => {
           name: 'ApprovalSuccess',
           params: {
             depositId: deposit.id,
+            deposit: result.data || deposit,
             action: selected,
             stage: result.stage,
           },
@@ -219,6 +220,7 @@ const TakeActionScreen = ({ navigation, route }) => {
             </View>
             <View style={styles.summaryBody}>
               <Text style={styles.name}>{deposit.userName}</Text>
+              {deposit.email ? <Text style={styles.email}>{deposit.email}</Text> : null}
               <Text style={styles.amount}>
                 AED {Number(deposit.amountAed).toLocaleString('en-US', { minimumFractionDigits: 2 })}
               </Text>
@@ -339,6 +341,7 @@ const styles = StyleSheet.create({
   avatarText: { color: '#1a1208', fontSize: 16, fontWeight: '800' },
   summaryBody: { flex: 1 },
   name: { color: adminColors.textPrimary, fontSize: 17, fontWeight: '700' },
+  email: { color: adminColors.textMuted, fontSize: 12, marginTop: 2 },
   ref: { color: adminColors.textMuted, fontSize: 12, marginTop: 2 },
   readOnlyBlock: {
     backgroundColor: adminColors.cardBg,

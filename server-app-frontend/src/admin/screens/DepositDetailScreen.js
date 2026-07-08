@@ -19,7 +19,7 @@ import {
   canUserActOnDeposit,
 } from '../constants/depositStatus';
 import { navigateToAdminScreen } from '../utils/navigation';
-import { getDisplayPaymentId, getDisplayReferenceNumber } from '../../services/adminApi';
+import { getDisplayPaymentId, getDisplayReferenceNumber, isMissingDepositProfile } from '../../services/adminApi';
 import { adminColors, adminShadow, getInitials } from '../theme/adminTheme';
 
 const DetailRow = ({ label, value, highlight }) => (
@@ -46,14 +46,15 @@ const DepositDetailScreen = ({ navigation, route }) => {
   const insets = useSafeAreaInsets();
   const { deposits, user, isManager, isAdmin, isSuperAdmin, getDepositById } = useAdmin();
   const depositId = route.params?.depositId;
-  const cached = deposits.find(d => d.id === depositId);
+  const paramDeposit = route.params?.deposit;
+  const cached = paramDeposit || deposits.find(d => d.id === depositId);
   const [deposit, setDeposit] = useState(cached || null);
   const [loading, setLoading] = useState(!cached);
 
   useEffect(() => {
     let active = true;
     (async () => {
-      if (cached) {
+      if (cached && !isMissingDepositProfile(cached)) {
         setDeposit(cached);
         setLoading(false);
         return;
@@ -61,7 +62,7 @@ const DepositDetailScreen = ({ navigation, route }) => {
       setLoading(true);
       const detail = await getDepositById(depositId);
       if (active) {
-        setDeposit(detail);
+        setDeposit(detail || cached || null);
         setLoading(false);
       }
     })();
