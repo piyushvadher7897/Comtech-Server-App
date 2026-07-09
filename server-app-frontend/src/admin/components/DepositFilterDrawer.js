@@ -8,6 +8,7 @@ import {
   Pressable,
   ScrollView,
   Platform,
+  useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -101,6 +102,7 @@ const DepositFilterDrawer = ({
   onReset,
 }) => {
   const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
   const defaults = getWebAdminDateRange();
   const [statusFilter, setStatusFilter] = useState(initialStatusFilter);
   const [startDate, setStartDate] = useState(initialDateRange?.startDate || defaults.startDate);
@@ -147,7 +149,15 @@ const DepositFilterDrawer = ({
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.overlay}>
         <Pressable style={styles.backdrop} onPress={onClose} />
-        <View style={[styles.drawer, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 12 }]}>
+        <View
+          style={[
+            styles.drawer,
+            {
+              height: windowHeight,
+              paddingTop: insets.top + 12,
+              paddingBottom: insets.bottom + 12,
+            },
+          ]}>
           <View style={styles.drawerHeader}>
             <View style={styles.drawerTitleRow}>
               <FilterIcon size={18} />
@@ -158,59 +168,67 @@ const DepositFilterDrawer = ({
             </TouchableOpacity>
           </View>
 
-          <ScrollView
-            style={styles.drawerScroll}
-            contentContainerStyle={styles.drawerBody}
-            showsVerticalScrollIndicator
-            keyboardShouldPersistTaps="handled"
-            nestedScrollEnabled
-            bounces
-            alwaysBounceVertical>
-            <Text style={styles.sectionTitle}>Status</Text>
-            <Text style={styles.sectionHint}>Same as web admin Status / Approve Status</Text>
-            {STATUS_FILTER_OPTIONS.map(option => {
-              const selected = statusFilter === option.id;
-              return (
-                <TouchableOpacity
-                  key={option.id}
-                  style={[styles.optionRow, selected && styles.optionRowSelected]}
-                  onPress={() => setStatusFilter(option.id)}
-                  activeOpacity={0.85}>
-                  <View style={[styles.radio, selected && styles.radioSelected]}>
-                    {selected ? <View style={styles.radioDot} /> : null}
-                  </View>
-                  <View style={styles.optionText}>
-                    <Text style={[styles.optionLabel, selected && styles.optionLabelSelected]}>
-                      {option.label}
-                    </Text>
-                    <Text style={styles.optionHint}>{option.hint}</Text>
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
+          <View style={styles.drawerScrollWrap}>
+            <ScrollView
+              style={styles.drawerScroll}
+              contentContainerStyle={styles.drawerBody}
+              showsVerticalScrollIndicator={false}
+              showsHorizontalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              nestedScrollEnabled
+              scrollEventThrottle={16}
+              overScrollMode="never"
+              persistentScrollbar={false}>
+              <Text style={styles.sectionTitle}>Status</Text>
+              <Text style={styles.sectionHint}>Same as web admin Status / Approve Status</Text>
+              {STATUS_FILTER_OPTIONS.map(option => {
+                const selected = statusFilter === option.id;
+                return (
+                  <Pressable
+                    key={option.id}
+                    style={({ pressed }) => [
+                      styles.optionRow,
+                      selected && styles.optionRowSelected,
+                      pressed && styles.optionRowPressed,
+                    ]}
+                    onPress={() => setStatusFilter(option.id)}
+                    delayPressIn={80}>
+                    <View style={[styles.radio, selected && styles.radioSelected]}>
+                      {selected ? <View style={styles.radioDot} /> : null}
+                    </View>
+                    <View style={styles.optionText}>
+                      <Text style={[styles.optionLabel, selected && styles.optionLabelSelected]}>
+                        {option.label}
+                      </Text>
+                      <Text style={styles.optionHint}>{option.hint}</Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
 
-            <Text style={[styles.sectionTitle, styles.sectionTitleSpaced]}>Date range</Text>
-            <Text style={styles.sectionHint}>Matches web admin calendar filter</Text>
+              <Text style={[styles.sectionTitle, styles.sectionTitleSpaced]}>Date range</Text>
+              <Text style={styles.sectionHint}>Matches web admin calendar filter</Text>
 
-            <View style={styles.presetRow}>
-              {DATE_PRESETS.map(preset => (
-                <TouchableOpacity
-                  key={preset.id}
-                  style={styles.presetChip}
-                  onPress={() => applyPreset(preset)}
-                  activeOpacity={0.85}>
-                  <Text style={styles.presetChipText}>{preset.label}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+              <View style={styles.presetRow}>
+                {DATE_PRESETS.map(preset => (
+                  <Pressable
+                    key={preset.id}
+                    style={({ pressed }) => [styles.presetChip, pressed && styles.presetChipPressed]}
+                    onPress={() => applyPreset(preset)}
+                    delayPressIn={80}>
+                    <Text style={styles.presetChipText}>{preset.label}</Text>
+                  </Pressable>
+                ))}
+              </View>
 
-            <View style={styles.dateRow}>
-              <DateField label="Start date" value={startDate} onChange={setStartDate} />
-              <DateField label="End date" value={endDate} onChange={setEndDate} />
-            </View>
+              <View style={styles.dateRow}>
+                <DateField label="Start date" value={startDate} onChange={setStartDate} />
+                <DateField label="End date" value={endDate} onChange={setEndDate} />
+              </View>
 
-            {dateError ? <Text style={styles.dateError}>{dateError}</Text> : null}
-          </ScrollView>
+              {dateError ? <Text style={styles.dateError}>{dateError}</Text> : null}
+            </ScrollView>
+          </View>
 
           <View style={styles.footer}>
             <TouchableOpacity style={styles.resetButton} onPress={handleReset} activeOpacity={0.85}>
@@ -238,7 +256,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   drawer: {
-    height: '100%',
     width: '88%',
     maxWidth: 360,
     backgroundColor: adminColors.backgroundElevated,
@@ -247,11 +264,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     flexDirection: 'column',
   },
+  drawerScrollWrap: {
+    flex: 1,
+    minHeight: 0,
+  },
   drawerScroll: {
     flex: 1,
-    flexGrow: 1,
-    flexShrink: 1,
-    minHeight: 0,
   },
   drawerHeader: {
     flexDirection: 'row',
@@ -271,8 +289,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   drawerBody: {
-    paddingBottom: 20,
-    flexGrow: 0,
+    paddingBottom: 24,
   },
   sectionTitle: {
     color: adminColors.gold,
@@ -306,6 +323,9 @@ const styles = StyleSheet.create({
   optionRowSelected: {
     borderColor: adminColors.cardBorder,
     backgroundColor: 'rgba(212, 175, 55, 0.08)',
+  },
+  optionRowPressed: {
+    opacity: 0.85,
   },
   radio: {
     width: 20,
@@ -361,6 +381,9 @@ const styles = StyleSheet.create({
     color: adminColors.textSecondary,
     fontSize: 12,
     fontWeight: '600',
+  },
+  presetChipPressed: {
+    opacity: 0.85,
   },
   dateRow: {
     gap: 12,
