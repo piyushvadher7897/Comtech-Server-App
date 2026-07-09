@@ -21,7 +21,7 @@ const getLocalAdminUrl = () => {
     return `http://${ADMIN_LOCAL_HOST}:${ADMIN_LOCAL_PORT}`;
   }
   if (Platform.OS === 'android') {
-    return `http://192.168.1.8:${ADMIN_LOCAL_PORT}`;
+    return `http://78.129.235.52:${ADMIN_LOCAL_PORT}`;
   }
   return `http://localhost:${ADMIN_LOCAL_PORT}`;
 };
