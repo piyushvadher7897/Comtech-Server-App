@@ -18,7 +18,14 @@ import DepositFilterDrawer from '../components/DepositFilterDrawer';
 import DepositFilterBar from '../components/DepositFilterBar';
 import { ChevronRightIcon, SearchIcon } from '../components/AdminIcons';
 import { useAdmin } from '../context/AdminContext';
-import { formatWebAdminDateRangeLabel, fetchApprovalQueue, getDisplayReferenceNumber, isDefaultDepositDateRange } from '../../services/adminApi';
+import {
+  formatWebAdminDateRangeLabel,
+  fetchApprovalQueue,
+  getDepositListNotes,
+  getDepositRemarks,
+  getDisplayReferenceNumber,
+  isDefaultDepositDateRange,
+} from '../../services/adminApi';
 import {
   LIST_TABS,
   STATUS_FILTERS,
@@ -26,7 +33,7 @@ import {
   matchesListTab,
   matchesStatusFilter,
   getStatusFilterLabel,
-  getWebStatusLine,
+  getDepositStatusSummary,
   canUserActOnDeposit,
 } from '../constants/depositStatus';
 import { navigateToAdminScreen, navigateToAdminProfile } from '../utils/navigation';
@@ -162,6 +169,9 @@ const FundDepositListScreen = ({ navigation, route }) => {
         d.referenceNumber.toLowerCase().includes(q) ||
         (d.email && d.email.toLowerCase().includes(q)) ||
         (d.paymentMethod && d.paymentMethod.toLowerCase().includes(q)) ||
+        getDepositRemarks(d).toLowerCase().includes(q) ||
+        String(d.description || '').toLowerCase().includes(q) ||
+        String(d.comments || '').toLowerCase().includes(q) ||
         String(d.dbStatus || '').toLowerCase().includes(q) ||
         String(d.approveStatus || '').toLowerCase().includes(q)
       );
@@ -173,6 +183,7 @@ const FundDepositListScreen = ({ navigation, route }) => {
       onQueueTab && canUserActOnDeposit(item, { isManager, isAdmin, isSuperAdmin });
     const queueType =
       activeTab === LIST_TABS.MANAGER ? 'pending_manager' : 'pending_admin';
+    const notes = getDepositListNotes(item);
 
     return (
     <TouchableOpacity
@@ -195,7 +206,12 @@ const FundDepositListScreen = ({ navigation, route }) => {
         <Text style={styles.ref}>
           {getDisplayReferenceNumber(item)} · {formatDate(item.createdAt)}
         </Text>
-        <Text style={styles.webStatus}>{getWebStatusLine(item)}</Text>
+        <Text style={styles.statusSummary}>{getDepositStatusSummary(item)}</Text>
+        {notes.map(note => (
+          <Text key={note.label} style={styles.listNote}>
+            {note.label}: {note.text}
+          </Text>
+        ))}
         <View style={styles.cardBottom}>
           <DepositStatusBadge status={item.status} compact />
         </View>
@@ -275,7 +291,7 @@ const FundDepositListScreen = ({ navigation, route }) => {
             <SearchIcon />
             <TextInput
               style={styles.search}
-              placeholder="Search name, email, ref, payment via, status"
+              placeholder="Search name, email, ref, remarks, payment via, status"
               placeholderTextColor={adminColors.textDim}
               value={search}
               onChangeText={setSearch}
@@ -456,10 +472,18 @@ const styles = StyleSheet.create({
     fontSize: 11,
     marginBottom: 4,
   },
-  webStatus: {
-    color: adminColors.textDim,
-    fontSize: 10,
+  statusSummary: {
+    color: adminColors.textSecondary,
+    fontSize: 12,
+    lineHeight: 17,
     marginBottom: 8,
+    fontWeight: '600',
+  },
+  listNote: {
+    color: adminColors.textSecondary,
+    fontSize: 12,
+    lineHeight: 18,
+    marginBottom: 4,
   },
   cardBottom: {
     flexDirection: 'row',

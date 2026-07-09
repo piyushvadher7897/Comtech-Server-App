@@ -12,6 +12,10 @@ const ADMIN_LOCAL_PORT = 5056; // match cgoldBack_new_transform/envs/local.env P
 // Set Mac LAN IP when testing admin on a physical phone (e.g. '192.168.1.42')
 const ADMIN_LOCAL_HOST = null;
 
+// true = release APK also uses http://78.129.235.52:5056 for admin APIs.
+// false = release APK uses https://appapi.comtechgold.com
+const ADMIN_USE_REMOTE_TEST = true;
+
 const getLocalAdminUrl = () => {
   if (ADMIN_LOCAL_HOST) {
     return `http://${ADMIN_LOCAL_HOST}:${ADMIN_LOCAL_PORT}`;
@@ -26,13 +30,14 @@ const getLocalAdminUrl = () => {
 export const SERVER_APP_URL = SERVER_PROD_URL;
 export const Shoket_URL = SERVER_SOCKET_PROD;
 
-// Admin Side — local backend in dev, production in release
-export const ADMIN_APP_URL = __DEV__ ? getLocalAdminUrl() : ADMIN_PROD_URL;
+// Admin Side — remote test server in dev + release (when ADMIN_USE_REMOTE_TEST), else production
+export const ADMIN_APP_URL =
+  __DEV__ || ADMIN_USE_REMOTE_TEST ? getLocalAdminUrl() : ADMIN_PROD_URL;
 
 // Backward compatibility for server-side screens (HomeScreen socket, etc.)
 export const APP_URL = SERVER_APP_URL;
 
-if (__DEV__) {
+if (__DEV__ || ADMIN_USE_REMOTE_TEST) {
   console.log('[Server Side] API:', SERVER_APP_URL);
   console.log('[Server Side] Socket:', Shoket_URL);
   console.log('[Admin Side]  API:', ADMIN_APP_URL);

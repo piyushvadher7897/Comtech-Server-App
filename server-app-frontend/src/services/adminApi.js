@@ -1,5 +1,10 @@
 import api from './apiClient';
-import { USER_ROLES, normStatus, formatApprovalActivity } from '../admin/constants/depositStatus';
+import {
+  USER_ROLES,
+  normStatus,
+  formatApprovalActivity,
+  statusFilterToWorkflowQuery,
+} from '../admin/constants/depositStatus';
 
 const APP_ADMIN_BASE = '/api/appadmin';
 export const DEPOSIT_LIST_PAGE_SIZE = 10;
@@ -104,6 +109,60 @@ const resolveDepositAmounts = (doc, record) => {
 
 export const isMissingDepositProfile = deposit =>
   !deposit?.userName || deposit.userName === '—';
+
+/** Treat ~, blank, and whitespace as missing (user app placeholder values). */
+export const isEmptyDepositText = value => {
+  const trimmed = String(value ?? '').trim();
+  return !trimmed || trimmed === '~';
+};
+
+const resolveDepositCommentsFromRecord = record => {
+  if (!record) return '';
+  const direct = String(record.comments ?? '').trim();
+  if (!isEmptyDepositText(direct)) return direct;
+  const activities = record.activity || [];
+  for (let i = activities.length - 1; i >= 0; i -= 1) {
+    const remark = String(activities[i]?.remarks ?? '').trim();
+    if (!isEmptyDepositText(remark)) return remark;
+  }
+  return '';
+};
+
+const resolveDepositDescriptionFromRecord = record => {
+  const description = String(record?.description ?? '').trim();
+  return isEmptyDepositText(description) ? '' : description;
+};
+
+/** Latest admin remark — same field on web (`comments`) and mobile (`remarks`). */
+export const getDepositRemarks = deposit => {
+  if (!deposit) return '';
+  const raw = deposit._raw || deposit;
+  const comments = resolveDepositCommentsFromRecord(deposit) || resolveDepositCommentsFromRecord(raw);
+  if (comments) return comments;
+  const lastRemarks = String(deposit.lastRemarks ?? '').trim();
+  if (!isEmptyDepositText(lastRemarks)) return lastRemarks;
+  const description =
+    resolveDepositDescriptionFromRecord(deposit) || resolveDepositDescriptionFromRecord(raw);
+  return description;
+};
+
+/** List card lines — matches web admin Comments + Description columns. */
+export const getDepositListNotes = deposit => {
+  if (!deposit) return [];
+  const raw = deposit._raw || deposit;
+  const notes = [];
+
+  const commentText =
+    resolveDepositCommentsFromRecord(deposit) || resolveDepositCommentsFromRecord(raw);
+  const descriptionText =
+    resolveDepositDescriptionFromRecord(deposit) || resolveDepositDescriptionFromRecord(raw);
+
+  if (commentText) notes.push({ label: 'Comments', text: commentText });
+  if (descriptionText && descriptionText !== commentText) {
+    notes.push({ label: 'Description', text: descriptionText });
+  }
+  return notes;
+};
 
 export const mapBackendDeposit = (doc, user) => {
   const record = doc?._raw || doc;
@@ -230,8 +289,8 @@ export const mapBackendDeposit = (doc, user) => {
     paymentMethod: record.paymentVia || record.paymentMethod || '',
     paymentId: String(record._id || record.id || ''),
     transactionNo: record.trNo || record.transactionNo || '',
-    description: record.description || '',
-    comments: record.comments || '',
+    description: resolveDepositDescriptionFromRecord(record),
+    comments: resolveDepositCommentsFromRecord(record),
     status: workflowStatus,
     dbStatus,
     approveStatus,
@@ -250,7 +309,7 @@ export const mapBackendDeposit = (doc, user) => {
       by: a.byName || a.by || 'Admin',
       remarks: a.remarks,
     })),
-    lastRemarks: record.comments || '',
+    lastRemarks: resolveDepositCommentsFromRecord(record),
     _raw: record,
   };
 };
@@ -376,12 +435,20 @@ export const adminRefreshToken = async deviceID => {
 
 export const fetchDepositsPage = async (params = {}) => {
   const dateRange = getWebAdminDateRange();
-  const baseParams = { ...dateRange, ...params };
+  const { statusFilter, workflowStatus: workflowFromParams, ...rest } = params;
+  const workflowStatus =
+    workflowFromParams || statusFilterToWorkflowQuery(statusFilter);
+  const baseParams = { ...dateRange, ...rest };
   const limit = Number(baseParams.limit) || DEPOSIT_LIST_PAGE_SIZE;
   const page = Number(baseParams.page) || 1;
 
+  const requestParams = { ...baseParams, page, limit };
+  if (workflowStatus) {
+    requestParams.workflowStatus = workflowStatus;
+  }
+
   const { data } = await api.get(`${APP_ADMIN_BASE}/funddeposit`, {
-    params: { ...baseParams, page, limit },
+    params: requestParams,
   });
   const docs = (data.docs || data.data || []).map(d => mapBackendDeposit(d, d.user));
 

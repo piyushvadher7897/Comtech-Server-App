@@ -164,7 +164,8 @@ const DepositFilterDrawer = ({
             showsVerticalScrollIndicator
             keyboardShouldPersistTaps="handled"
             nestedScrollEnabled
-            bounces>
+            bounces
+            alwaysBounceVertical>
             <Text style={styles.sectionTitle}>Status</Text>
             <Text style={styles.sectionHint}>Same as web admin Status / Approve Status</Text>
             {STATUS_FILTER_OPTIONS.map(option => {
@@ -237,22 +238,27 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   drawer: {
-    flex: 1,
+    height: '100%',
     width: '88%',
     maxWidth: 360,
     backgroundColor: adminColors.backgroundElevated,
     borderLeftWidth: 1,
     borderLeftColor: adminColors.cardBorder,
     paddingHorizontal: 16,
+    flexDirection: 'column',
   },
   drawerScroll: {
     flex: 1,
+    flexGrow: 1,
+    flexShrink: 1,
+    minHeight: 0,
   },
   drawerHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 16,
+    flexShrink: 0,
   },
   drawerTitleRow: {
     flexDirection: 'row',
@@ -265,8 +271,8 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   drawerBody: {
-    paddingBottom: 24,
-    flexGrow: 1,
+    paddingBottom: 20,
+    flexGrow: 0,
   },
   sectionTitle: {
     color: adminColors.gold,
@@ -391,6 +397,7 @@ const styles = StyleSheet.create({
   },
   footer: {
     flexDirection: 'row',
+    flexShrink: 0,
     gap: 10,
     paddingTop: 12,
     borderTopWidth: 1,

@@ -76,6 +76,8 @@ export const AdminProvider = ({ children }) => {
 
   const depositDateRangeRef = useRef(depositDateRange);
   depositDateRangeRef.current = depositDateRange;
+  const statusFilterRef = useRef(statusFilter);
+  statusFilterRef.current = statusFilter;
   const lastFetchAtRef = useRef(0);
   const fetchInFlightRef = useRef(null);
 
@@ -104,6 +106,8 @@ export const AdminProvider = ({ children }) => {
 
   const refreshDeposits = useCallback(async ({ silent = false, dateRange, statusFilter: nextStatusFilter, force = false } = {}) => {
     const range = dateRange || depositDateRangeRef.current || getWebAdminDateRange();
+    const activeStatusFilter =
+      nextStatusFilter !== undefined ? nextStatusFilter : statusFilterRef.current;
 
     if (!force && fetchInFlightRef.current) {
       return fetchInFlightRef.current;
@@ -122,6 +126,7 @@ export const AdminProvider = ({ children }) => {
           ...range,
           page: 1,
           limit: DEPOSIT_LIST_PAGE_SIZE,
+          statusFilter: activeStatusFilter,
         });
         setDeposits(result.docs || []);
         setDepositPage(1);
@@ -162,6 +167,7 @@ export const AdminProvider = ({ children }) => {
         ...range,
         page: nextPage,
         limit: DEPOSIT_LIST_PAGE_SIZE,
+        statusFilter: statusFilterRef.current,
       });
       setDeposits(prev => {
         const seen = new Set(prev.map(d => d.id));
@@ -285,12 +291,19 @@ export const AdminProvider = ({ children }) => {
   };
 
   const resendOtp = async () => {
-    if (!pendingLogin?._id) return { success: false };
+    if (!pendingLogin?._id) {
+      return { success: false, message: 'Login session expired. Please sign in again.' };
+    }
     try {
       await adminResendOtp(pendingLogin._id);
-      return { success: true };
-    } catch {
-      return { success: false };
+      return { success: true, message: 'OTP sent to your email' };
+    } catch (err) {
+      const message =
+        err.response?.data?.error ||
+        err.response?.data?.message ||
+        err.message ||
+        'Could not resend OTP. Try again.';
+      return { success: false, message };
     }
   };
 

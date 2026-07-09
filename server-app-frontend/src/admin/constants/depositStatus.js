@@ -171,6 +171,18 @@ export const matchesListTab = (deposit, tab) => {
   return true;
 };
 
+/** Fully approved = Super Admin completed (not waiting on Super Admin). */
+export const isFullyApprovedDeposit = deposit => {
+  if (!deposit) return false;
+  if (deposit.status === DEPOSIT_STATUS.APPROVED) return true;
+  const dbStatus = normStatus(deposit.dbStatus);
+  const approveStatus = normStatus(deposit.approveStatus);
+  return (
+    dbStatus === 'approved' &&
+    (approveStatus === 'approve' || approveStatus === 'approved')
+  );
+};
+
 /** Filter by Status / Approve Status — same labels as web admin table */
 export const matchesStatusFilter = (deposit, filter) => {
   if (!filter || filter === STATUS_FILTERS.ALL) return true;
@@ -180,21 +192,49 @@ export const matchesStatusFilter = (deposit, filter) => {
 
   switch (filter) {
     case STATUS_FILTERS.PENDING:
-      return dbStatus === 'pending' || approveStatus === 'pending';
+      return (
+        isPendingManagerQueue(deposit) ||
+        dbStatus === 'pending' ||
+        (approveStatus === 'pending' && dbStatus !== 'approved')
+      );
     case STATUS_FILTERS.APPROVE:
-      return approveStatus === 'approve';
+      // Awaiting Super Admin — not fully approved yet
+      return isPendingAdminQueue(deposit);
     case STATUS_FILTERS.APPROVED:
-      return dbStatus === 'approved' || approveStatus === 'approved';
+      return isFullyApprovedDeposit(deposit);
     case STATUS_FILTERS.REJECTED:
       return (
+        deposit?.status === DEPOSIT_STATUS.REJECTED ||
         dbStatus === 'rejected' ||
         approveStatus === 'rejected' ||
         approveStatus === 'reject'
       );
     case STATUS_FILTERS.SEND_BACK:
-      return dbStatus === 'sendback' || approveStatus === 'sendback';
+      return (
+        deposit?.status === DEPOSIT_STATUS.SEND_BACK ||
+        dbStatus === 'sendback' ||
+        approveStatus === 'sendback'
+      );
     default:
       return true;
+  }
+};
+
+/** Map UI status chips to API workflowStatus (server-side list filter). */
+export const statusFilterToWorkflowQuery = filter => {
+  switch (filter) {
+    case STATUS_FILTERS.APPROVE:
+      return 'pending_admin';
+    case STATUS_FILTERS.APPROVED:
+      return 'approved';
+    case STATUS_FILTERS.REJECTED:
+      return 'rejected';
+    case STATUS_FILTERS.SEND_BACK:
+      return 'send_back';
+    case STATUS_FILTERS.PENDING:
+      return 'pending_manager';
+    default:
+      return undefined;
   }
 };
 
@@ -203,9 +243,49 @@ export const getStatusFilterLabel = filterId => {
   return option?.label || 'All statuses';
 };
 
-/** Web table columns: Status + Approve Status */
-export const getWebStatusLine = deposit => {
-  const status = deposit?.dbStatus || '—';
-  const approveStatus = deposit?.approveStatus || '—';
-  return `Status: ${status} · Approve: ${approveStatus}`;
+/** Plain-language status for list cards — not raw DB column values. */
+export const getDepositStatusSummary = deposit => {
+  if (!deposit) return '—';
+
+  if (isFullyApprovedDeposit(deposit) || deposit.status === DEPOSIT_STATUS.APPROVED) {
+    return `${APPROVAL_STAGE_LABELS.APPROVED_BY_SUPER_ADMIN} — deposit completed`;
+  }
+
+  const dbStatus = normStatus(deposit.dbStatus);
+  const approveStatus = normStatus(deposit.approveStatus);
+
+  if (
+    deposit.status === DEPOSIT_STATUS.REJECTED ||
+    dbStatus === 'rejected' ||
+    approveStatus === 'rejected' ||
+    approveStatus === 'reject'
+  ) {
+    return 'Rejected';
+  }
+
+  if (
+    deposit.status === DEPOSIT_STATUS.SEND_BACK ||
+    dbStatus === 'sendback' ||
+    approveStatus === 'sendback'
+  ) {
+    return 'Sent back — needs correction';
+  }
+
+  if (isAdminFinalStage(deposit)) {
+    return `${APPROVAL_STAGE_LABELS.APPROVED_BY_ADMIN} — awaiting ${APPROVAL_STAGE_LABELS.SUPER_ADMIN} approval`;
+  }
+
+  if (isPendingAdminQueue(deposit)) {
+    return `Awaiting ${APPROVAL_STAGE_LABELS.SUPER_ADMIN} approval`;
+  }
+
+  if (isPendingManagerQueue(deposit)) {
+    return `Awaiting ${APPROVAL_STAGE_LABELS.ADMIN} approval`;
+  }
+
+  const config = STATUS_CONFIG[deposit.status];
+  return config?.label || 'In review';
 };
+
+/** @deprecated Use getDepositStatusSummary — kept for search compatibility */
+export const getWebStatusLine = deposit => getDepositStatusSummary(deposit);

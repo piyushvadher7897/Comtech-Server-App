@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -14,12 +14,31 @@ import { BackIcon } from '../components/AdminIcons';
 import { useAdmin } from '../context/AdminContext';
 import { adminColors } from '../theme/adminTheme';
 
+const RESEND_COOLDOWN_SECONDS = 60;
+
+const formatCountdown = seconds => {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins}:${String(secs).padStart(2, '0')}`;
+};
+
 const AdminOtpScreen = ({ onBack }) => {
   const insets = useSafeAreaInsets();
   const { pendingLogin, verifyOtp, resendOtp } = useAdmin();
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [resendTimer, setResendTimer] = useState(RESEND_COOLDOWN_SECONDS);
+  const [resending, setResending] = useState(false);
+  const [resendSuccess, setResendSuccess] = useState(false);
+
+  useEffect(() => {
+    if (resendTimer <= 0) return undefined;
+    const timerId = setTimeout(() => {
+      setResendTimer(prev => Math.max(prev - 1, 0));
+    }, 1000);
+    return () => clearTimeout(timerId);
+  }, [resendTimer]);
 
   const handleVerify = async () => {
     setError('');
@@ -33,10 +52,22 @@ const AdminOtpScreen = ({ onBack }) => {
     if (!result.success) setError(result.message);
   };
 
+  const canResend = resendTimer <= 0 && !resending;
+
   const handleResend = async () => {
+    if (!canResend) return;
     setError('');
+    setResendSuccess(false);
+    setResending(true);
     const result = await resendOtp();
-    if (!result.success) setError('Could not resend OTP. Try again.');
+    setResending(false);
+    if (result.success) {
+      setResendSuccess(true);
+      setResendTimer(RESEND_COOLDOWN_SECONDS);
+      setOtp('');
+    } else {
+      setError(result.message || 'Could not resend OTP. Try again.');
+    }
   };
 
   return (
@@ -71,8 +102,23 @@ const AdminOtpScreen = ({ onBack }) => {
 
           <GoldButton title="VERIFY" onPress={handleVerify} loading={loading} />
 
-          <TouchableOpacity onPress={handleResend} style={styles.resend}>
-            <Text style={styles.resendText}>Resend OTP</Text>
+          {resendSuccess ? (
+            <Text style={styles.resendSuccess}>OTP sent to your email</Text>
+          ) : null}
+
+          <TouchableOpacity
+            onPress={handleResend}
+            style={styles.resend}
+            disabled={!canResend}>
+            {resending ? (
+              <Text style={styles.resendMuted}>Sending OTP...</Text>
+            ) : resendTimer > 0 ? (
+              <Text style={styles.resendMuted}>
+                Resend OTP in {formatCountdown(resendTimer)}
+              </Text>
+            ) : (
+              <Text style={styles.resendText}>Resend OTP</Text>
+            )}
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -128,6 +174,17 @@ const styles = StyleSheet.create({
   resendText: {
     color: adminColors.gold,
     fontSize: 14,
+    fontWeight: '600',
+  },
+  resendMuted: {
+    color: adminColors.textMuted,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  resendSuccess: {
+    color: '#4ADE80',
+    fontSize: 13,
+    textAlign: 'center',
     fontWeight: '600',
   },
 });

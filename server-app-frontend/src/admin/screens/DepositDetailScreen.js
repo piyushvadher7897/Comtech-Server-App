@@ -19,7 +19,7 @@ import {
   canUserActOnDeposit,
 } from '../constants/depositStatus';
 import { navigateToAdminScreen } from '../utils/navigation';
-import { getDisplayPaymentId, getDisplayReferenceNumber, isMissingDepositProfile } from '../../services/adminApi';
+import { getDisplayPaymentId, getDisplayReferenceNumber, getDepositRemarks, isMissingDepositProfile } from '../../services/adminApi';
 import { adminColors, adminShadow, getInitials } from '../theme/adminTheme';
 
 const DetailRow = ({ label, value, highlight }) => (
@@ -92,6 +92,7 @@ const DepositDetailScreen = ({ navigation, route }) => {
   }
 
   const canTakeAction = canUserActOnDeposit(deposit, { isManager, isAdmin, isSuperAdmin });
+  const remarks = getDepositRemarks(deposit);
 
   const statusLabel =
     deposit.status === DEPOSIT_STATUS.PENDING_MANAGER
@@ -173,7 +174,7 @@ const DepositDetailScreen = ({ navigation, route }) => {
           <DetailRow label="Transaction No" value={deposit.transactionNo} />
           <DetailRow label="Reference Number" value={getDisplayReferenceNumber(deposit)} />
           <DetailRow label="Description" value={deposit.description} />
-          <DetailRow label="Comments" value={deposit.comments || '—'} />
+          <DetailRow label="Comments" value={remarks || '—'} />
           <DetailRow label="Created At" value={formatDate(deposit.createdAt)} />
 
           {deposit.activity?.length > 0 ? (
@@ -181,9 +182,14 @@ const DepositDetailScreen = ({ navigation, route }) => {
               <View style={styles.divider} />
               <Text style={styles.activityTitle}>Activity</Text>
               {deposit.activity.map((a, i) => (
-                <Text key={i} style={styles.activityItem}>
-                  {a.action} — {formatDate(a.at)}
-                </Text>
+                <View key={i} style={styles.activityBlock}>
+                  <Text style={styles.activityItem}>
+                    {a.action} — {formatDate(a.at)}
+                  </Text>
+                  {a.remarks ? (
+                    <Text style={styles.activityRemarks}>Remarks: {a.remarks}</Text>
+                  ) : null}
+                </View>
               ))}
             </>
           ) : null}
@@ -269,7 +275,9 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     textTransform: 'uppercase',
   },
-  activityItem: { color: adminColors.textMuted, fontSize: 12, marginBottom: 4 },
+  activityItem: { color: adminColors.textMuted, fontSize: 12 },
+  activityBlock: { marginBottom: 8 },
+  activityRemarks: { color: adminColors.textDim, fontSize: 11, marginTop: 2, lineHeight: 16 },
   footer: {
     position: 'absolute',
     left: 0,

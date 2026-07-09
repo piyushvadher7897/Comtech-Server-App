@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AdminInput, AdminScreenLayout } from '../components/AdminInput';
@@ -7,12 +7,32 @@ import { BackIcon } from '../components/AdminIcons';
 import { useAdmin } from '../context/AdminContext';
 import { adminColors } from '../theme/adminTheme';
 
+const RESEND_COOLDOWN_SECONDS = 60;
+
+const formatCountdown = seconds => {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins}:${String(secs).padStart(2, '0')}`;
+};
+
 const AdminForgotOtpScreen = ({ email, onBack, onContinue }) => {
   const insets = useSafeAreaInsets();
   const { requestForgotPasswordOtp } = useAdmin();
   const [otp, setOtp] = useState('');
   const [error, setError] = useState('');
   const [resending, setResending] = useState(false);
+  const [resendTimer, setResendTimer] = useState(RESEND_COOLDOWN_SECONDS);
+  const [resendSuccess, setResendSuccess] = useState(false);
+
+  useEffect(() => {
+    if (resendTimer <= 0) return undefined;
+    const timerId = setTimeout(() => {
+      setResendTimer(prev => Math.max(prev - 1, 0));
+    }, 1000);
+    return () => clearTimeout(timerId);
+  }, [resendTimer]);
+
+  const canResend = resendTimer <= 0 && !resending;
 
   const handleContinue = () => {
     setError('');
@@ -25,11 +45,17 @@ const AdminForgotOtpScreen = ({ email, onBack, onContinue }) => {
   };
 
   const handleResend = async () => {
+    if (!canResend) return;
     setError('');
+    setResendSuccess(false);
     setResending(true);
     const result = await requestForgotPasswordOtp(email);
     setResending(false);
-    if (!result.success) {
+    if (result.success) {
+      setResendSuccess(true);
+      setResendTimer(RESEND_COOLDOWN_SECONDS);
+      setOtp('');
+    } else {
       setError(result.message || 'Could not resend OTP. Try again.');
     }
   };
@@ -66,8 +92,24 @@ const AdminForgotOtpScreen = ({ email, onBack, onContinue }) => {
             onPress={handleContinue}
             disabled={!otp.trim()}
           />
-          <TouchableOpacity onPress={handleResend} style={styles.resend} disabled={resending}>
-            <Text style={styles.resendText}>{resending ? 'Sending...' : 'Resend OTP'}</Text>
+
+          {resendSuccess ? (
+            <Text style={styles.resendSuccess}>OTP sent to your email</Text>
+          ) : null}
+
+          <TouchableOpacity
+            onPress={handleResend}
+            style={styles.resend}
+            disabled={!canResend}>
+            {resending ? (
+              <Text style={styles.resendMuted}>Sending OTP...</Text>
+            ) : resendTimer > 0 ? (
+              <Text style={styles.resendMuted}>
+                Resend OTP in {formatCountdown(resendTimer)}
+              </Text>
+            ) : (
+              <Text style={styles.resendText}>Resend OTP</Text>
+            )}
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -122,6 +164,17 @@ const styles = StyleSheet.create({
   resendText: {
     color: adminColors.gold,
     fontSize: 14,
+    fontWeight: '600',
+  },
+  resendMuted: {
+    color: adminColors.textMuted,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  resendSuccess: {
+    color: '#4ADE80',
+    fontSize: 13,
+    textAlign: 'center',
     fontWeight: '600',
   },
 });
