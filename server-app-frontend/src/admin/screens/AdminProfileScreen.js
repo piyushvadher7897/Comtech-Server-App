@@ -1,9 +1,10 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import {View, Text, StyleSheet, ScrollView} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AdminScreenLayout } from '../components/AdminInput';
 import AdminHeader from '../components/AdminHeader';
 import GoldButton from '../components/GoldButton';
+import DepositNotificationCard from '../components/DepositNotificationCard';
 import { MailIcon, ShieldIcon } from '../components/AdminIcons';
 import { useAdmin } from '../context/AdminContext';
 import { adminColors, adminShadow, getInitials } from '../theme/adminTheme';
@@ -64,6 +65,9 @@ const AdminProfileScreen = () => {
             <Text style={styles.roleText}>{roleLabel}</Text>
           </View>
         </View>
+
+        <Text style={styles.sectionTitle}>Notifications</Text>
+        <DepositNotificationCard />
 
         <Text style={styles.sectionTitle}>Account Details</Text>
         <View style={styles.card}>
@@ -219,6 +223,7 @@ const styles = StyleSheet.create({
   },
   logoutBtn: {
     width: '100%',
+    marginTop: 8,
   },
 });
 

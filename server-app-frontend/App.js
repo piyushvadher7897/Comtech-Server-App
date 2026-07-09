@@ -23,8 +23,14 @@ const App = () => {
 
     setup();
 
+    // Server Side tab — monitoring alerts only (Redis/PM2/disk from production backend)
     const unsubscribe = setupForegroundNotificationHandlers(remoteMessage => {
       if (remoteMessage.messageId === lastMessageIdRef.current) {
+        return;
+      }
+
+      // Fund deposit pushes are handled on Admin Side (adminFirebaseMessaging.js)
+      if (remoteMessage?.data?.type === 'fund_deposit_pending') {
         return;
       }
 

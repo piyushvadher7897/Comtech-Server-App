@@ -26,6 +26,7 @@ import { DEPOSIT_STATUS, APPROVAL_STAGE_LABELS, formatApprovalActivity } from '.
 import { navigateToAdminScreen, navigateToAdminProfile } from '../utils/navigation';
 import DepositFilterBar from '../components/DepositFilterBar';
 import DepositFilterDrawer from '../components/DepositFilterDrawer';
+import DepositNotificationCard from '../components/DepositNotificationCard';
 import { getAdminTabBarPadding } from '../components/AdminTabBar';
 import { adminColors, adminShadow } from '../theme/adminTheme';
 
@@ -185,6 +186,8 @@ const AdminDashboardScreen = ({ navigation }) => {
           />
         }
         showsVerticalScrollIndicator={false}>
+        <DepositNotificationCard variant="compact" />
+
         <View style={styles.heroCard}>
           <View style={styles.heroTop}>
             <View style={styles.heroText}>

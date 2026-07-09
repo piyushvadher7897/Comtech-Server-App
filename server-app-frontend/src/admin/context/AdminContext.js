@@ -34,6 +34,7 @@ import {
   saveAdminToken,
   setAdminTokenRefreshHandlers,
 } from '../../services/adminTokenRefresh';
+import {syncAdminFcmToken} from '../../services/adminFirebaseMessaging';
 
 const AdminContext = createContext(null);
 
@@ -73,6 +74,12 @@ export const AdminProvider = ({ children }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
   const [pendingLogin, setPendingLogin] = useState(null);
+  const [postLoginNotificationResult, setPostLoginNotificationResult] = useState(null);
+
+  const clearPostLoginNotificationResult = useCallback(
+    () => setPostLoginNotificationResult(null),
+    [],
+  );
 
   const depositDateRangeRef = useRef(depositDateRange);
   depositDateRangeRef.current = depositDateRange;
@@ -211,6 +218,7 @@ export const AdminProvider = ({ children }) => {
         return;
       }
       await Promise.all([refreshDeposits({ silent, force }), refreshStats()]);
+      syncAdminFcmToken().catch(() => {});
     },
     [refreshDeposits, refreshStats],
   );
@@ -283,7 +291,9 @@ export const AdminProvider = ({ children }) => {
       await persistSession(session);
       setPendingLogin(null);
       await loadAdminData({ force: true });
-      return { success: true };
+      const notificationResult = await syncAdminFcmToken();
+      setPostLoginNotificationResult(notificationResult);
+      return { success: true, notification: notificationResult };
     } catch (err) {
       const message = err.response?.data?.error || err.message || 'OTP verification failed';
       return { success: false, message };
@@ -356,6 +366,7 @@ export const AdminProvider = ({ children }) => {
     const sub = AppState.addEventListener('change', nextState => {
       if (nextState === 'active' && user) {
         refreshAdminTokenIfNeeded().catch(() => {});
+        syncAdminFcmToken().catch(() => {});
       }
     });
     return () => sub.remove();
@@ -377,6 +388,7 @@ export const AdminProvider = ({ children }) => {
       const activeToken = refreshResult.token;
       setUser({ ...session, token: activeToken });
       await loadAdminData({ silent: true, force: true });
+      await syncAdminFcmToken();
     } catch {
       await clearAdminAuthStorage();
     }
@@ -474,6 +486,8 @@ export const AdminProvider = ({ children }) => {
       error,
       pendingLogin,
       clearPendingLogin,
+      postLoginNotificationResult,
+      clearPostLoginNotificationResult,
       login,
       verifyOtp,
       resendOtp,
@@ -507,7 +521,9 @@ export const AdminProvider = ({ children }) => {
       refreshing,
       error,
       pendingLogin,
+      postLoginNotificationResult,
       clearPendingLogin,
+      clearPostLoginNotificationResult,
       logout,
       restoreSession,
       refreshDeposits,

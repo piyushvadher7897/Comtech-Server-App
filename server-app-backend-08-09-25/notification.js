@@ -54,26 +54,59 @@ const sendNotification = async (data) => {
   const tokens = readDeviceTokens();
 
   if (!Array.isArray(tokens) || tokens.length === 0) {
-    console.log("No valid device tokens found.");
+    console.log("[server-app-notification] No device tokens in device_tokens.json");
     return { success: false, error: "No valid device tokens" };
   }
 
+  console.log("[server-app-notification] Sending to", tokens.length, "device(s)");
+
+  const sanitizedData = {};
+  if (data.data && typeof data.data === "object") {
+    for (const [key, value] of Object.entries(data.data)) {
+      if (value == null) continue;
+      sanitizedData[key] =
+        typeof value === "string" ? value : String(value);
+    }
+  }
+
   try {
-    const response = await getMessaging().sendEachForMulticast({
+    const message = {
       tokens,
       notification: {
         title: data.title,
         body: data.body,
       },
-    });
+    };
 
-    console.log("Notification sent successfully:", response);
+    if (Object.keys(sanitizedData).length) {
+      message.data = sanitizedData;
+    }
+
+    const response = await getMessaging().sendEachForMulticast(message);
+
+    console.log("[server-app-notification] Sent:", {
+      successCount: response.successCount,
+      failureCount: response.failureCount,
+    });
     return { success: true, response };
   } catch (err) {
-    console.error("Error sending notification:", err);
-    return { success: false, error: err };
+    console.error("[server-app-notification] Error:", err.message || err);
+    return { success: false, error: err.message || err };
   }
 };
+
+router.post("/send", async (req, res) => {
+  const { title, body, data } = req.body || {};
+  console.log("[server-app-notification] POST /send", { title, body });
+
+  if (!title || !body) {
+    return res.status(400).json({ success: false, error: "Title and body are required" });
+  }
+
+  const result = await sendNotification({ title, body, data });
+  const statusCode = result.success ? 200 : 500;
+  return res.status(statusCode).json(result);
+});
 
 module.exports = {
   notificationRouter: router,

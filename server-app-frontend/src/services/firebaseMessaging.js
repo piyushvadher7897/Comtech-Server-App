@@ -1,10 +1,14 @@
+/**
+ * Server Side tab only — monitoring alerts (Redis/PM2/disk).
+ * Registers FCM token with production SERVER_APP_URL. Do not use for Admin Side.
+ */
 import messaging from '@react-native-firebase/messaging';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import {Platform} from 'react-native';
 import {SERVER_APP_URL} from '../global/constant';
 
-const API_URL = SERVER_APP_URL;
+const LOG = '[ServerFCM]';
 
 const requestUserPermission = async () => {
   if (Platform.OS !== 'ios') {
@@ -17,18 +21,17 @@ const requestUserPermission = async () => {
     authStatus === messaging.AuthorizationStatus.PROVISIONAL;
 
   if (!enabled) {
-    console.log('Notification permission not granted');
+    console.log(LOG, 'Notification permission not granted');
     return false;
   }
 
-  console.log('Authorization status:', authStatus);
   return true;
 };
 
-const updateToken = async fcmToken => {
+const updateMonitoringToken = async fcmToken => {
   try {
     const result = await axios.post(
-      `${API_URL}/notification/device-token`,
+      `${SERVER_APP_URL}/notification/device-token`,
       {token: fcmToken},
       {
         timeout: 10000,
@@ -36,12 +39,12 @@ const updateToken = async fcmToken => {
       },
     );
 
-    if (result.status === 200) {
+    if (result.status === 200 || result.status === 201) {
       await AsyncStorage.setItem('tokenstored', 'Yes');
-      console.log('Token stored successfully');
+      console.log(LOG, 'Monitoring token stored on', SERVER_APP_URL);
     }
   } catch (err) {
-    console.error('Error updating token:', err.response?.data || err.message);
+    console.warn(LOG, 'Monitoring token failed:', err.response?.data || err.message);
   }
 };
 
@@ -55,7 +58,7 @@ const getFcmToken = async () => {
   const fcmToken = await messaging().getToken();
 
   if (!fcmToken) {
-    console.log('Failed to receive FCM token');
+    console.log(LOG, 'No FCM token received');
     return null;
   }
 
@@ -63,11 +66,11 @@ const getFcmToken = async () => {
   const storedStatus = await AsyncStorage.getItem('tokenstored');
 
   if (!storedStatus || storedStatus !== 'Yes' || storedToken !== fcmToken) {
-    await updateToken(fcmToken);
+    await updateMonitoringToken(fcmToken);
     await AsyncStorage.setItem('fcm_token', fcmToken);
   }
 
-  console.log('Your Firebase Token is:', fcmToken);
+  console.log(LOG, 'Token prefix:', fcmToken.slice(0, 20) + '...');
   return fcmToken;
 };
 
@@ -76,16 +79,13 @@ export const initializeFirebaseMessaging = async () => {
     await getFcmToken();
 
     const unsubscribeTokenRefresh = messaging().onTokenRefresh(async newToken => {
-      console.log('FCM Token refreshed:', newToken);
-      await updateToken(newToken);
+      console.log(LOG, 'Token refreshed');
+      await updateMonitoringToken(newToken);
       await AsyncStorage.setItem('fcm_token', newToken);
     });
 
     const unsubscribeForeground = messaging().onMessage(async remoteMessage => {
-      console.log(
-        'A new FCM message arrived in foreground!',
-        JSON.stringify(remoteMessage),
-      );
+      console.log(LOG, 'Foreground message:', JSON.stringify(remoteMessage));
     });
 
     return () => {
@@ -93,7 +93,7 @@ export const initializeFirebaseMessaging = async () => {
       unsubscribeForeground();
     };
   } catch (error) {
-    console.error('Error initializing messaging:', error);
+    console.error(LOG, 'Init error:', error);
     return () => {};
   }
 };
@@ -110,7 +110,7 @@ export const setupForegroundNotificationHandlers = (
   });
 
   messaging().onNotificationOpenedApp(remoteMessage => {
-    console.log('Notification opened from background:', remoteMessage);
+    console.log(LOG, 'Opened from background:', remoteMessage);
     if (remoteMessage?.notification) {
       onForegroundMessage(remoteMessage);
     }
@@ -120,7 +120,7 @@ export const setupForegroundNotificationHandlers = (
     .getInitialNotification()
     .then(remoteMessage => {
       if (remoteMessage?.notification) {
-        console.log('Notification opened app from quit state:', remoteMessage);
+        console.log(LOG, 'Opened from quit:', remoteMessage);
         onForegroundMessage(remoteMessage);
       }
     });

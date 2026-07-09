@@ -116,16 +116,34 @@ export const isEmptyDepositText = value => {
   return !trimmed || trimmed === '~';
 };
 
-const resolveDepositCommentsFromRecord = record => {
+const resolveDirectCommentsFromRecord = record => {
   if (!record) return '';
   const direct = String(record.comments ?? '').trim();
-  if (!isEmptyDepositText(direct)) return direct;
+  return isEmptyDepositText(direct) ? '' : direct;
+};
+
+const resolveLatestActivityRemarksFromRecord = record => {
+  if (!record) return '';
   const activities = record.activity || [];
   for (let i = activities.length - 1; i >= 0; i -= 1) {
     const remark = String(activities[i]?.remarks ?? '').trim();
     if (!isEmptyDepositText(remark)) return remark;
   }
   return '';
+};
+
+const resolveDepositCommentsFromRecord = record => {
+  const direct = resolveDirectCommentsFromRecord(record);
+  if (direct) return direct;
+  return resolveLatestActivityRemarksFromRecord(record);
+};
+
+/** Short preview for list cards — long text becomes "vvvv...". */
+export const truncateDepositListText = (text, maxLength = 50) => {
+  const trimmed = String(text ?? '').trim();
+  if (!trimmed) return '';
+  if (trimmed.length <= maxLength) return trimmed;
+  return `${trimmed.slice(0, maxLength).trimEnd()}...`;
 };
 
 const resolveDepositDescriptionFromRecord = record => {
@@ -146,20 +164,32 @@ export const getDepositRemarks = deposit => {
   return description;
 };
 
-/** List card lines — matches web admin Comments + Description columns. */
+/** List card lines — Comments, Remarks, Description (truncated when long). */
 export const getDepositListNotes = deposit => {
   if (!deposit) return [];
   const raw = deposit._raw || deposit;
   const notes = [];
 
   const commentText =
-    resolveDepositCommentsFromRecord(deposit) || resolveDepositCommentsFromRecord(raw);
+    resolveDirectCommentsFromRecord(deposit) || resolveDirectCommentsFromRecord(raw);
+  const remarkText =
+    resolveLatestActivityRemarksFromRecord(deposit) ||
+    resolveLatestActivityRemarksFromRecord(raw);
   const descriptionText =
     resolveDepositDescriptionFromRecord(deposit) || resolveDepositDescriptionFromRecord(raw);
 
-  if (commentText) notes.push({ label: 'Comments', text: commentText });
-  if (descriptionText && descriptionText !== commentText) {
-    notes.push({ label: 'Description', text: descriptionText });
+  if (commentText) {
+    notes.push({ label: 'Comments', text: truncateDepositListText(commentText) });
+  }
+  if (remarkText && remarkText !== commentText) {
+    notes.push({ label: 'Remarks', text: truncateDepositListText(remarkText) });
+  }
+  if (
+    descriptionText &&
+    descriptionText !== commentText &&
+    descriptionText !== remarkText
+  ) {
+    notes.push({ label: 'Description', text: truncateDepositListText(descriptionText) });
   }
   return notes;
 };

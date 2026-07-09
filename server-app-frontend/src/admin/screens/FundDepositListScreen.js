@@ -208,7 +208,11 @@ const FundDepositListScreen = ({ navigation, route }) => {
         </Text>
         <Text style={styles.statusSummary}>{getDepositStatusSummary(item)}</Text>
         {notes.map(note => (
-          <Text key={note.label} style={styles.listNote}>
+          <Text
+            key={note.label}
+            style={styles.listNote}
+            numberOfLines={1}
+            ellipsizeMode="tail">
             {note.label}: {note.text}
           </Text>
         ))}
@@ -291,7 +295,7 @@ const FundDepositListScreen = ({ navigation, route }) => {
             <SearchIcon />
             <TextInput
               style={styles.search}
-              placeholder="Search name, email, ref, remarks, payment via, status"
+              placeholder="Search name, email, ref, remarks ..."
               placeholderTextColor={adminColors.textDim}
               value={search}
               onChangeText={setSearch}
@@ -484,6 +488,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
     marginBottom: 4,
+    flexShrink: 1,
   },
   cardBottom: {
     flexDirection: 'row',

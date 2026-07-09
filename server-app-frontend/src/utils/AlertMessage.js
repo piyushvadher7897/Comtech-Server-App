@@ -4,20 +4,25 @@ export const AlertMessage = ({
   title,
   message,
   okButton,
-  okText,
+  okText = 'OK',
   cancelText,
   cancel,
   styleCancel,
 }) => {
-  return Alert.alert(title, message, [
-    {
+  const buttons = [];
+
+  if (cancelText) {
+    buttons.push({
       text: cancelText,
       onPress: cancel,
       style: styleCancel,
-    },
-    {
-      text: okText,
-      onPress: okButton,
-    },
-  ]);
+    });
+  }
+
+  buttons.push({
+    text: okText,
+    onPress: okButton,
+  });
+
+  return Alert.alert(title, message, buttons);
 };

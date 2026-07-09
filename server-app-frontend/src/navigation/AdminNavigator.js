@@ -15,6 +15,9 @@ import AdminForgotPasswordScreen from '../admin/screens/AdminForgotPasswordScree
 import AdminForgotOtpScreen from '../admin/screens/AdminForgotOtpScreen';
 import AdminResetPasswordScreen from '../admin/screens/AdminResetPasswordScreen';
 import AdminTabBar from '../admin/components/AdminTabBar';
+import AdminNotificationHandler from '../admin/components/AdminNotificationHandler';
+import AdminDepositNotificationListener from '../admin/components/AdminDepositNotificationListener';
+import AdminPostLoginNotificationPrompt from '../admin/components/AdminPostLoginNotificationPrompt';
 
 const AdminStack = createNativeStackNavigator();
 const AdminTabs = createBottomTabNavigator();
@@ -24,6 +27,9 @@ const EmbeddedDepositsScreen = props => (
 );
 
 const AdminTabNavigator = () => (
+  <>
+    <AdminNotificationHandler />
+    <AdminPostLoginNotificationPrompt />
     <AdminTabs.Navigator
       tabBar={props => <AdminTabBar {...props} />}
       screenOptions={{
@@ -56,6 +62,7 @@ const AdminTabNavigator = () => (
         options={{ tabBarLabel: 'Profile' }}
       />
     </AdminTabs.Navigator>
+  </>
 );
 
 const AdminFlow = () => {
@@ -121,7 +128,9 @@ const AdminFlow = () => {
   }
 
   return (
-    <AdminStack.Navigator screenOptions={{ headerShown: false }}>
+    <>
+      <AdminDepositNotificationListener />
+      <AdminStack.Navigator screenOptions={{ headerShown: false }}>
       <AdminStack.Screen name="AdminTabs" component={AdminTabNavigator} />
       <AdminStack.Screen name="FundDepositList" component={FundDepositListScreen} />
       <AdminStack.Screen name="DepositDetail" component={DepositDetailScreen} />
@@ -132,6 +141,7 @@ const AdminFlow = () => {
         options={{ gestureEnabled: false }}
       />
     </AdminStack.Navigator>
+    </>
   );
 };
 
