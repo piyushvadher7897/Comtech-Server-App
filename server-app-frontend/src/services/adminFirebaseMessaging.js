@@ -6,7 +6,7 @@ import messaging from '@react-native-firebase/messaging';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import {PermissionsAndroid, Platform} from 'react-native';
-import {ADMIN_APP_URL} from '../global/constant';
+import {ADMIN_APP_URL, SERVER_APP_HEADERS} from '../global/constant';
 import {ADMIN_TOKEN_KEY} from './adminTokenRefresh';
 import {handleFundDepositNotification} from '../admin/utils/adminNotificationNavigation';
 
@@ -76,6 +76,7 @@ export const registerAdminDeviceToken = async fcmToken => {
         timeout: 15000,
         headers: {
           'Content-Type': 'application/json',
+          ...SERVER_APP_HEADERS,
           Authorization: authToken.startsWith('Bearer ')
             ? authToken
             : `Bearer ${authToken}`,

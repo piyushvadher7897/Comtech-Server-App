@@ -1,6 +1,6 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { ADMIN_APP_URL } from '../global/constant';
+import { ADMIN_APP_URL, SERVER_APP_HEADERS } from '../global/constant';
 import {
   ADMIN_TOKEN_KEY,
   handleAdminUnauthorized,
@@ -10,12 +10,20 @@ import {
 const api = axios.create({
   baseURL: ADMIN_APP_URL,
   timeout: 30000,
-  headers: { 'Content-Type': 'application/json' },
+  headers: {
+    'Content-Type': 'application/json',
+    ...SERVER_APP_HEADERS,
+  },
 });
 
 let handling401 = false;
 
 api.interceptors.request.use(async config => {
+  config.headers = {
+    ...SERVER_APP_HEADERS,
+    ...(config.headers || {}),
+  };
+
   if (!config.url?.includes('/auth/refresh-token')) {
     await refreshAdminTokenIfNeeded();
   }

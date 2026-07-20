@@ -21,7 +21,7 @@ const getLocalAdminUrl = () => {
     return `http://${ADMIN_LOCAL_HOST}:${ADMIN_LOCAL_PORT}`;
   }
   if (Platform.OS === 'android') {
-    return `http://78.129.235.52:${ADMIN_LOCAL_PORT}`;
+    // return `http://192.168.1.5:${ADMIN_LOCAL_PORT}`;
   }
   return `http://localhost:${ADMIN_LOCAL_PORT}`;
 };
@@ -34,6 +34,16 @@ export const Shoket_URL = SERVER_SOCKET_PROD;
 // export const ADMIN_APP_URL =
 //   __DEV__ || ADMIN_USE_REMOTE_TEST ? getLocalAdminUrl() : ADMIN_PROD_URL;
 export const ADMIN_APP_URL = ADMIN_PROD_URL;
+// export const ADMIN_APP_URL = getLocalAdminUrl();
+
+// Sent on all Admin Side API calls so backend can:
+// 1) identify this as the internal Server App
+// 2) bypass mobile app-version enforcement (okhttp UA looks like Android)
+export const SERVER_APP_USER_AGENT = 'ComTechServer/1.0';
+export const SERVER_APP_HEADERS = {
+  'User-Agent': SERVER_APP_USER_AGENT,
+  comtechserver: 'true',
+};
 
 // Backward compatibility for server-side screens (HomeScreen socket, etc.)
 export const APP_URL = SERVER_APP_URL;

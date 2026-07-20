@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import DeviceInfo from 'react-native-device-info';
-import { ADMIN_APP_URL } from '../global/constant';
+import { ADMIN_APP_URL, SERVER_APP_HEADERS } from '../global/constant';
 
 export const ADMIN_TOKEN_KEY = 'adminToken';
 export const ADMIN_SESSION_KEY = 'adminSession';
@@ -89,6 +89,7 @@ const requestAdminTokenRefresh = async token => {
       timeout: 30000,
       headers: {
         'Content-Type': 'application/json',
+        ...SERVER_APP_HEADERS,
         Authorization: token.startsWith('Bearer ') ? token : `Bearer ${token}`,
       },
     },
