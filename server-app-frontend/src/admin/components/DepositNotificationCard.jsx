@@ -60,15 +60,15 @@ const DepositNotificationCard = ({variant = 'full', onStatusChange}) => {
         </View>
         <View style={styles.headerText}>
           <Text style={[styles.title, isCompact && styles.titleCompact]}>
-            Deposit alerts
+            Approval alerts
           </Text>
           {!isCompact ? (
             <Text style={styles.subtitle}>
-              Get notified when a user submits a fund deposit request.
+              Get notified for new fund deposits and withdraws so you can review them quickly.
             </Text>
           ) : (
             <Text style={styles.subtitleCompact}>
-              You will miss new deposit requests until alerts are on.
+              You may miss new deposit and withdraw requests until alerts are on.
             </Text>
           )}
         </View>
@@ -90,7 +90,7 @@ const DepositNotificationCard = ({variant = 'full', onStatusChange}) => {
             ? 'TURNING ON...'
             : enabled
               ? 'REFRESH ALERTS'
-              : 'TURN ON DEPOSIT ALERTS'
+              : 'TURN ON ALERTS'
         }
         onPress={enableNotifications}
         loading={loading}

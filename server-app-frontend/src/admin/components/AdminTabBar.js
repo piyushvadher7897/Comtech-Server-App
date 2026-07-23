@@ -21,12 +21,12 @@ export const ADMIN_TAB_BAR_HEIGHT = 68;
 
 const TAB_CONFIG = [
   { route: 'AdminDashboard', label: 'Home', Icon: DashboardIcon },
-  { route: 'AdminDeposits', label: 'Deposits', Icon: DepositsIcon },
+  { route: 'AdminDeposits', label: 'Funds', Icon: DepositsIcon },
   {
     route: 'AdminApprovals',
     label: 'Approve',
     Icon: ApprovalsIcon,
-    badgeKey: 'totalPending',
+    badgeKey: 'combinedTotalPending',
   },
   { route: 'AdminProfile', label: 'Profile', Icon: ProfileIcon },
 ];

@@ -1,59 +1,116 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { View, Image, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import { adminColors, getInitials } from '../theme/adminTheme';
-import { BackIcon } from './AdminIcons';
+import { BackIcon, MenuIcon } from './AdminIcons';
+import { useAdminDrawer, useRegisterAdminNavigation } from '../context/AdminDrawerContext';
+import { useAdmin } from '../context/AdminContext';
+import { navigateToAdminProfile } from '../utils/navigation';
 
+/**
+ * Shared admin navigation header.
+ *
+ * Modes:
+ * - Brand (no title): menu + centered Comtech logo + profile
+ * - Page title: menu (+ optional back) + centered title + profile
+ */
 const AdminHeader = ({
   userName,
   title,
   showProfile = true,
+  showMenu = true,
+  showLogo,
   profileActive = false,
   onProfilePress,
   onBack,
+  onMenuPress,
   compact = false,
 }) => {
   const insets = useSafeAreaInsets();
-  const clean = !title;
+  const navigation = useNavigation();
+  useRegisterAdminNavigation(navigation);
+  const { openDrawer } = useAdminDrawer();
+  const { user } = useAdmin();
+
+  const resolvedName = userName || (user && user.name) || '';
+  const hasTitle = Boolean(title);
+  // Centered logo on brand/home headers (e.g. Dashboard)
+  const shouldShowLogo = showLogo != null ? showLogo : !hasTitle;
+  const handleMenu = onMenuPress || openDrawer;
+
+  const handleProfile = useCallback(() => {
+    if (onProfilePress) {
+      onProfilePress();
+      return;
+    }
+    navigateToAdminProfile(navigation);
+  }, [navigation, onProfilePress]);
+
   const avatar = (
     <View style={[styles.profileAvatar, profileActive && styles.profileAvatarActive]}>
-      <Text style={styles.profileAvatarText}>{getInitials(userName)}</Text>
+      <Text style={styles.profileAvatarText}>{getInitials(resolvedName)}</Text>
     </View>
   );
 
   return (
-    <View style={[styles.bar, { paddingTop: insets.top + 10 }]}>
-      <View style={[styles.header, clean && styles.headerClean, compact && styles.headerCompact]}>
-        <View style={[styles.left, clean && styles.leftClean]}>
-          {onBack ? (
-            <TouchableOpacity onPress={onBack} style={styles.backBtn} hitSlop={8}>
-              <BackIcon size={22} />
-            </TouchableOpacity>
-          ) : (
+    <View style={[styles.bar, { paddingTop: insets.top + (compact ? 6 : 10) }]}>
+      <View style={[styles.header, compact && styles.headerCompact]}>
+        {/* Centered brand logo or page title */}
+        <View style={styles.centerOverlay} pointerEvents="none">
+          {hasTitle ? (
+            <Text style={styles.title} numberOfLines={1}>
+              {title}
+            </Text>
+          ) : shouldShowLogo ? (
             <Image
               source={require('../../../asset/images/logo-header-white.png')}
               style={styles.logo}
               resizeMode="contain"
+              accessibilityLabel="Comtech Gold"
             />
-          )}
+          ) : null}
         </View>
 
-        {title ? (
-          <Text style={styles.title} numberOfLines={1}>
-            {title}
-          </Text>
-        ) : (
-          <View style={styles.flexSpacer} />
-        )}
+        <View style={[styles.side, styles.sideLeft]}>
+          <View style={styles.leftCluster}>
+            {showMenu ? (
+              <TouchableOpacity
+                onPress={handleMenu}
+                style={styles.menuBtn}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Open menu">
+                <MenuIcon size={20} />
+              </TouchableOpacity>
+            ) : null}
 
-        <View style={[styles.right, clean && styles.rightClean]}>
-          {showProfile && userName ? (
-            onProfilePress && !profileActive ? (
-              <TouchableOpacity onPress={onProfilePress} activeOpacity={0.8} hitSlop={8}>
+            {onBack ? (
+              <TouchableOpacity
+                onPress={onBack}
+                style={styles.backBtn}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Go back">
+                <BackIcon size={22} />
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        </View>
+
+        <View style={[styles.side, styles.sideRight]}>
+          {showProfile && resolvedName ? (
+            profileActive ? (
+              avatar
+            ) : (
+              <TouchableOpacity
+                onPress={handleProfile}
+                activeOpacity={0.8}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Open profile">
                 {avatar}
               </TouchableOpacity>
-            ) : (
-              avatar
             )
           ) : (
             <View style={styles.rightSpacer} />
@@ -67,74 +124,86 @@ const AdminHeader = ({
 const styles = StyleSheet.create({
   bar: {
     backgroundColor: adminColors.headerBg,
-    borderBottomWidth: 1,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: adminColors.headerBorder,
-    paddingHorizontal: 16,
-    paddingBottom: 12,
+    paddingHorizontal: 14,
+    paddingBottom: 10,
     zIndex: 10,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 44,
-  },
-  headerClean: {
     justifyContent: 'space-between',
+    minHeight: 44,
+    position: 'relative',
   },
   headerCompact: {
     minHeight: 40,
   },
-  left: {
-    width: 130,
+  centerOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
     justifyContent: 'center',
-  },
-  leftClean: {
-    width: undefined,
-    flexShrink: 1,
-  },
-  logo: {
-    width: 130,
-    height: 38,
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    alignItems: 'flex-start',
-    justifyContent: 'center',
+    paddingHorizontal: 56,
   },
   title: {
-    flex: 1,
-    textAlign: 'center',
     color: adminColors.textPrimary,
     fontSize: 17,
     fontWeight: '700',
-    paddingHorizontal: 8,
+    letterSpacing: 0.2,
+    textAlign: 'center',
   },
-  flexSpacer: {
+  side: {
+    minHeight: 40,
+    justifyContent: 'center',
+    zIndex: 1,
+  },
+  sideLeft: {
     flex: 1,
+    alignItems: 'flex-start',
   },
-  right: {
-    width: 130,
+  sideRight: {
+    flex: 1,
     alignItems: 'flex-end',
+  },
+  leftCluster: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  menuBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(212, 175, 55, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.4)',
+  },
+  logo: {
+    width: 118,
+    height: 34,
+  },
+  backBtn: {
+    width: 36,
+    height: 38,
+    alignItems: 'center',
     justifyContent: 'center',
   },
-  rightClean: {
-    width: undefined,
-    flexShrink: 0,
-  },
   rightSpacer: {
-    width: 42,
-    height: 42,
+    width: 38,
+    height: 38,
   },
   profileAvatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     backgroundColor: adminColors.gold,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(212, 175, 55, 0.45)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(232, 201, 106, 0.55)',
   },
   profileAvatarActive: {
     borderWidth: 2.5,

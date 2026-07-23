@@ -14,12 +14,16 @@ import GoldButton from '../components/GoldButton';
 import { BackIcon } from '../components/AdminIcons';
 import { useAdmin } from '../context/AdminContext';
 import {
-  DEPOSIT_STATUS,
+  WITHDRAW_STATUS,
   APPROVAL_STAGE_LABELS,
-  canUserActOnDeposit,
-} from '../constants/depositStatus';
+  canUserActOnWithdraw,
+} from '../constants/withdrawStatus';
 import { navigateToAdminScreen } from '../utils/navigation';
-import { getDisplayPaymentId, getDisplayReferenceNumber, getDepositRemarks, isMissingDepositProfile } from '../../services/adminApi';
+import {
+  getDisplayPaymentId,
+  getDisplayReferenceNumber,
+  isMissingWithdrawProfile,
+} from '../../services/adminApi';
 import { adminColors, adminShadow, getInitials } from '../theme/adminTheme';
 
 const DetailRow = ({ label, value, highlight }) => (
@@ -42,34 +46,34 @@ const formatDate = iso => {
   });
 };
 
-const DepositDetailScreen = ({ navigation, route }) => {
+const WithdrawDetailScreen = ({ navigation, route }) => {
   const insets = useSafeAreaInsets();
-  const { deposits, user, isManager, isAdmin, isSuperAdmin, getDepositById } = useAdmin();
-  const depositId = route.params?.depositId;
-  const paramDeposit = route.params?.deposit;
-  const cached = paramDeposit || deposits.find(d => d.id === depositId);
-  const [deposit, setDeposit] = useState(cached || null);
+  const { withdraws, isManager, isAdmin, isSuperAdmin, getWithdrawById } = useAdmin();
+  const withdrawId = route.params?.withdrawId;
+  const paramWithdraw = route.params?.withdraw;
+  const cached = paramWithdraw || withdraws.find(d => d.id === withdrawId);
+  const [withdraw, setWithdraw] = useState(cached || null);
   const [loading, setLoading] = useState(!cached);
 
   useEffect(() => {
     let active = true;
     (async () => {
-      if (cached && !isMissingDepositProfile(cached)) {
-        setDeposit(cached);
+      if (cached && !isMissingWithdrawProfile(cached)) {
+        setWithdraw(cached);
         setLoading(false);
         return;
       }
       setLoading(true);
-      const detail = await getDepositById(depositId);
+      const detail = await getWithdrawById(withdrawId);
       if (active) {
-        setDeposit(detail || cached || null);
+        setWithdraw(detail || cached || null);
         setLoading(false);
       }
     })();
     return () => {
       active = false;
     };
-  }, [cached, depositId, getDepositById]);
+  }, [cached, withdrawId, getWithdrawById]);
 
   if (loading) {
     return (
@@ -81,23 +85,22 @@ const DepositDetailScreen = ({ navigation, route }) => {
     );
   }
 
-  if (!deposit) {
+  if (!withdraw) {
     return (
       <AdminScreenLayout>
         <View style={styles.center}>
-          <Text style={styles.missing}>Deposit not found.</Text>
+          <Text style={styles.missing}>Withdraw not found.</Text>
         </View>
       </AdminScreenLayout>
     );
   }
 
-  const canTakeAction = canUserActOnDeposit(deposit, { isManager, isAdmin, isSuperAdmin });
-  const remarks = getDepositRemarks(deposit);
-
+  const canTakeAction = canUserActOnWithdraw(withdraw, { isManager, isAdmin, isSuperAdmin });
+  const bank = withdraw.bank || {};
   const statusLabel =
-    deposit.status === DEPOSIT_STATUS.PENDING_MANAGER
+    withdraw.status === WITHDRAW_STATUS.PENDING_MANAGER
       ? APPROVAL_STAGE_LABELS.PENDING_ADMIN
-      : deposit.status === DEPOSIT_STATUS.PENDING_ADMIN
+      : withdraw.status === WITHDRAW_STATUS.PENDING_ADMIN
         ? APPROVAL_STAGE_LABELS.PENDING_SUPER_ADMIN
         : null;
 
@@ -107,7 +110,7 @@ const DepositDetailScreen = ({ navigation, route }) => {
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <BackIcon />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Deposit Details</Text>
+        <Text style={styles.headerTitle}>Withdraw Details</Text>
         <View style={styles.backBtn} />
       </View>
 
@@ -117,78 +120,50 @@ const DepositDetailScreen = ({ navigation, route }) => {
         showsVerticalScrollIndicator={false}>
         <View style={styles.userHeader}>
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{getInitials(deposit.userName)}</Text>
+            <Text style={styles.avatarText}>{getInitials(withdraw.userName)}</Text>
           </View>
           <View style={styles.userInfo}>
-            <Text style={styles.userName}>{deposit.userName}</Text>
-            <Text style={styles.userEmail}>{deposit.email || '—'}</Text>
+            <Text style={styles.userName}>{withdraw.userName}</Text>
+            <Text style={styles.userEmail}>{withdraw.email || '—'}</Text>
           </View>
         </View>
 
         <View style={styles.badgeWrap}>
-          <DepositStatusBadge status={deposit.status} />
+          <DepositStatusBadge status={withdraw.status} />
           {statusLabel ? <Text style={styles.statusHint}>{statusLabel}</Text> : null}
         </View>
 
         <View style={styles.card}>
-          <DetailRow label="Currency" value={deposit.currency} />
+          <DetailRow label="Currency" value={withdraw.currency} />
           <DetailRow
             label="USD Amount"
-            value={`$${Number(deposit.amountUsd).toLocaleString('en-US', { minimumFractionDigits: 2 })}`}
+            value={`$${Number(withdraw.amountUsd).toLocaleString('en-US', {
+              minimumFractionDigits: 2,
+            })}`}
           />
           <DetailRow
             label="AED Amount"
-            value={`AED ${Number(deposit.amountAed).toLocaleString('en-US', { minimumFractionDigits: 2 })}`}
+            value={`AED ${Number(withdraw.amountAed).toLocaleString('en-US', {
+              minimumFractionDigits: 2,
+            })}`}
             highlight
           />
-          <DetailRow label="Payment Method" value={deposit.paymentMethod} />
-          <DetailRow label="Status" value={deposit.dbStatus} />
-          <DetailRow label="Approve Status" value={deposit.approveStatus} />
-          {(isAdmin || isSuperAdmin) && (
-            <DetailRow
-              label={`${APPROVAL_STAGE_LABELS.ADMIN} Approved By`}
-              value={deposit.adminApprovedByName || deposit.managerApprovedByName}
-            />
-          )}
-          {(isAdmin || isSuperAdmin) && (
-            <DetailRow
-              label={`${APPROVAL_STAGE_LABELS.SUPER_ADMIN} Approved By`}
-              value={deposit.superAdminApprovedByName}
-            />
-          )}
-          {deposit.adminApprovedViaLabel || deposit.managerApprovedViaLabel ? (
-            <DetailRow
-              label={APPROVAL_STAGE_LABELS.ADMIN_APPROVED_VIA}
-              value={deposit.adminApprovedViaLabel || deposit.managerApprovedViaLabel}
-            />
-          ) : null}
-          {deposit.superAdminApprovedViaLabel ? (
-            <DetailRow
-              label={APPROVAL_STAGE_LABELS.SUPER_ADMIN_APPROVED_VIA}
-              value={deposit.superAdminApprovedViaLabel}
-            />
-          ) : null}
-          <DetailRow label="Payment ID" value={getDisplayPaymentId(deposit)} />
-          <DetailRow label="Transaction No" value={deposit.transactionNo} />
-          <DetailRow label="Reference Number" value={getDisplayReferenceNumber(deposit)} />
-          <DetailRow label="Description" value={deposit.description} />
-          <DetailRow label="Comments" value={remarks || '—'} />
-          <DetailRow label="Created At" value={formatDate(deposit.createdAt)} />
-
-          {deposit.activity && deposit.activity.length > 0 ? (
+          <DetailRow label="Payment Method" value={withdraw.paymentMethod} />
+          <DetailRow label="Status" value={withdraw.dbStatus} />
+          <DetailRow label="Approve Status" value={withdraw.approveStatus} />
+          <DetailRow label="Payment ID" value={getDisplayPaymentId(withdraw)} />
+          <DetailRow label="Reference Number" value={getDisplayReferenceNumber(withdraw)} />
+          <DetailRow label="Description" value={withdraw.description} />
+          <DetailRow label="Remarks" value={withdraw.comments || withdraw.lastRemarks || '—'} />
+          <DetailRow label="Created At" value={formatDate(withdraw.createdAt)} />
+          {bank.accountNumber || bank.bankName ? (
             <>
               <View style={styles.divider} />
-              <Text style={styles.activityTitle}>Activity</Text>
-              {deposit.activity.map((a, i) => (
-                <View key={i} style={styles.activityBlock}>
-                  <Text style={styles.activityItem}>
-                    {a.action} — {formatDate(a.at)}
-                  </Text>
-                  {a.remarks ? (
-                    <Text style={styles.activityRemarks}>Remarks: {a.remarks}</Text>
-                  ) : null}
-                </View>
-              ))}
+              <Text style={styles.activityTitle}>Bank</Text>
+              <DetailRow label="Bank Name" value={bank.bankName} />
+              <DetailRow label="Account Name" value={bank.accountName || bank.accountHolderName} />
+              <DetailRow label="Account Number" value={bank.accountNumber} />
+              <DetailRow label="IBAN" value={bank.iban} />
             </>
           ) : null}
         </View>
@@ -199,11 +174,11 @@ const DepositDetailScreen = ({ navigation, route }) => {
           <GoldButton
             title="TAKE ACTION"
             onPress={() =>
-              navigateToAdminScreen(navigation, 'TakeAction', {
-                depositId: deposit.id,
-                deposit,
+              navigateToAdminScreen(navigation, 'TakeWithdrawAction', {
+                withdrawId: withdraw.id,
+                withdraw,
                 queueType:
-                  deposit.status === DEPOSIT_STATUS.PENDING_ADMIN
+                  withdraw.status === WITHDRAW_STATUS.PENDING_ADMIN
                     ? 'pending_admin'
                     : 'pending_manager',
               })
@@ -274,9 +249,6 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     textTransform: 'uppercase',
   },
-  activityItem: { color: adminColors.textMuted, fontSize: 12 },
-  activityBlock: { marginBottom: 8 },
-  activityRemarks: { color: adminColors.textDim, fontSize: 11, marginTop: 2, lineHeight: 16 },
   footer: {
     paddingHorizontal: 16,
     paddingTop: 12,
@@ -290,4 +262,4 @@ const styles = StyleSheet.create({
   missing: { color: adminColors.textMuted, fontSize: 16 },
 });
 
-export default DepositDetailScreen;
+export default WithdrawDetailScreen;

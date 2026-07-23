@@ -537,15 +537,16 @@ export const mapUiActionToWorkflow = selectedStatus => {
  * POST /api/appadmin/funddeposit/action (same rules as fundDepositWorkflowService).
  */
 export const submitWorkflowAction = async (deposit, selectedStatus, remarks) => {
+  const id = deposit && (deposit.id || (deposit._raw && (deposit._raw._id || deposit._raw.id)));
   const { data } = await api.post(`${APP_ADMIN_BASE}/funddeposit/action`, {
-    _id: deposit.id,
+    _id: id,
     action: mapUiActionToWorkflow(selectedStatus),
     remarks: remarks || '',
   });
-  const record = data?.data || data;
+  const record = (data && data.data) || data;
   return {
     record,
-    workflowStatus: data?.workflowStatus,
+    workflowStatus: data && data.workflowStatus,
   };
 };
 
@@ -591,3 +592,210 @@ export const getEditableReferenceNumber = deposit => {
   const ref = deposit?._raw?.refNo ?? deposit?.referenceNumber ?? '';
   return isEmptyDepositReference(ref) ? '' : String(ref).trim();
 };
+
+// --- Fund Withdraw (mirrors deposit appadmin APIs) ---
+
+export const WITHDRAW_LIST_PAGE_SIZE = 10;
+
+export const mapWithdrawWorkflowStatus = record => {
+  if (!record) return 'pending_manager';
+  if (record.workflowStatus) return record.workflowStatus;
+
+  const status = normStatus(record.status);
+  const approveStatus = normStatus(record.approveStatus);
+
+  if (status === 'withdraw cancel' || approveStatus === 'reject' || approveStatus === 'rejected') {
+    return 'rejected';
+  }
+  if (approveStatus === 'sendback') return 'send_back';
+  if (
+    status === 'withdraw sent' &&
+    (approveStatus === 'approve' ||
+      approveStatus === 'approved' ||
+      approveStatus === 'withdraw sent')
+  ) {
+    return 'approved';
+  }
+  if (status === 'withdraw sent' && (approveStatus === 'pending' || approveStatus === '')) {
+    return 'pending_admin';
+  }
+  if (status === 'withdraw initiated') return 'pending_manager';
+  return 'pending_manager';
+};
+
+export const mapBackendWithdraw = (doc, user) => {
+  const record = doc?._raw || doc;
+  const u = resolveDepositUser(doc, user);
+  const dbStatus = doc?.dbStatus || record.status || '';
+  const approveStatus = doc?.approveStatus ?? record.approveStatus ?? 'pending';
+  const workflowStatus = mapWithdrawWorkflowStatus({
+    ...record,
+    status: dbStatus,
+    approveStatus,
+  });
+  const { amountAed, amountUsd } = resolveDepositAmounts(doc, record);
+
+  return {
+    id: String(record._id || record.id),
+    userName: formatDepositUserName(u, doc, record),
+    email: u?.email || doc?.email || record.email || '',
+    referenceNumber: record.refNo ?? '',
+    createdAt: record.createdAt || record.date,
+    amountAed,
+    amountUsd,
+    currency: record.currency || 'AED',
+    paymentMethod: record.paymentVia || record.paymentMethod || '',
+    paymentId: String(record._id || record.id || ''),
+    description: resolveDepositDescriptionFromRecord(record),
+    comments: record.remark || record.comments || '',
+    status: workflowStatus,
+    dbStatus,
+    approveStatus,
+    userID: record.userID,
+    bankId: record.bankId || null,
+    bank: record.bank || doc?.bank || null,
+    lastRemarks: record.remark || record.comments || '',
+    _raw: record,
+  };
+};
+
+const sortWithdrawsLikeWeb = docs =>
+  [...docs].sort((a, b) => {
+    const priority = value => {
+      const v = normStatus(value);
+      if (v === 'pending' || v === 'withdraw initiated') return 0;
+      if (v === 'approve') return 1;
+      if (v === 'withdraw sent' || v === 'approved') return 2;
+      if (v === 'sendback') return 3;
+      if (v === 'rejected' || v === 'reject' || v === 'withdraw cancel') return 4;
+      return 5;
+    };
+    const byApprove = priority(a.approveStatus) - priority(b.approveStatus);
+    if (byApprove !== 0) return byApprove;
+    return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+  });
+
+export const fetchWithdrawsPage = async (params = {}) => {
+  const dateRange = getWebAdminDateRange();
+  const { statusFilter, workflowStatus: workflowFromParams, ...rest } = params;
+  const workflowStatus = workflowFromParams || statusFilterToWorkflowQuery(statusFilter);
+  const baseParams = { ...dateRange, ...rest };
+  const limit = Number(baseParams.limit) || WITHDRAW_LIST_PAGE_SIZE;
+  const page = Number(baseParams.page) || 1;
+
+  const requestParams = { ...baseParams, page, limit };
+  if (workflowStatus) {
+    requestParams.workflowStatus = workflowStatus;
+  }
+
+  const { data } = await api.get(`${APP_ADMIN_BASE}/fundwithdraw`, {
+    params: requestParams,
+  });
+  const docs = (data.docs || data.data || []).map(d => mapBackendWithdraw(d, d.user));
+
+  return {
+    docs: sortWithdrawsLikeWeb(docs),
+    totalDocs: data.totalDocs ?? docs.length,
+    page,
+    limit,
+    hasNextPage: Boolean(data.hasNextPage),
+    startDate: baseParams.startDate,
+    endDate: baseParams.endDate,
+  };
+};
+
+export const fetchWithdraws = async (params = {}) =>
+  fetchWithdrawsPage({ ...params, page: 1, limit: WITHDRAW_LIST_PAGE_SIZE });
+
+export const fetchWithdrawApprovalQueue = async (workflowStatus, params = {}) => {
+  const page = Number(params.page) || 1;
+  const limit = Number(params.limit) || 50;
+  const { data } = await api.get(`${APP_ADMIN_BASE}/fundwithdraw`, {
+    params: { workflowStatus, page, limit },
+  });
+  const docs = (data.docs || data.data || []).map(d => mapBackendWithdraw(d, d.user));
+  return {
+    docs: sortWithdrawsLikeWeb(docs),
+    totalDocs: data.totalDocs ?? docs.length,
+    hasNextPage: Boolean(data.hasNextPage),
+  };
+};
+
+export const fetchWithdrawStats = async () => {
+  const { data } = await api.get(`${APP_ADMIN_BASE}/fundwithdraw/stats`);
+  return data;
+};
+
+export const fetchWithdrawDetail = async id => {
+  const { data } = await api.post(`${APP_ADMIN_BASE}/fundwithdraw/view`, { id });
+  const payload = data.data || data;
+  const user = payload?.userID || payload?._raw?.user || payload?.user;
+  return mapBackendWithdraw(payload, user);
+};
+
+export const submitWithdrawWorkflowAction = async (withdraw, selectedStatus, remarks, meta = {}) => {
+  const id =
+    withdraw && (withdraw.id || (withdraw._raw && (withdraw._raw._id || withdraw._raw.id)));
+  const { data } = await api.post(`${APP_ADMIN_BASE}/fundwithdraw/action`, {
+    _id: id,
+    action: mapUiActionToWorkflow(selectedStatus),
+    remarks: remarks || '',
+    refNo: meta.refNo,
+    paymentVia: meta.paymentVia,
+  });
+  const record = (data && data.data) || data;
+  return {
+    record,
+    workflowStatus: data && data.workflowStatus,
+  };
+};
+
+export const buildWithdrawManagerPayload = (withdraw, selectedStatus, comments) => {
+  const raw = withdraw._raw || {};
+  const base = {
+    ...raw,
+    _id: withdraw.id,
+    userID: withdraw.userID || raw.userID,
+    amount: raw.amount ?? withdraw.amountAed,
+    currency: withdraw.currency || raw.currency,
+    comments: comments || '',
+    remark: comments || '',
+    refNo: raw.refNo || withdraw.referenceNumber,
+    paymentVia: raw.paymentVia || withdraw.paymentMethod,
+    user: raw.user,
+  };
+
+  if (selectedStatus === 'Rejected' || selectedStatus === 'Withdraw Cancel') {
+    return { ...base, status: 'Withdraw Cancel', approveStatus: 'reject', remark: comments };
+  }
+  return { ...base, status: 'Withdraw Sent', approveStatus: 'pending', comments };
+};
+
+export const submitWithdrawPending = async (withdraw, selectedStatus, comments, meta = {}) => {
+  const payload = buildWithdrawManagerPayload(withdraw, selectedStatus, comments);
+  if (meta.refNo != null) payload.refNo = meta.refNo;
+  if (meta.paymentVia != null) payload.paymentVia = meta.paymentVia;
+  const { data } = await api.post(`${APP_ADMIN_BASE}/fundwithdraw/pending`, payload);
+  return data?.data || data;
+};
+
+export const getWithdrawListNotes = withdraw => {
+  if (!withdraw) return [];
+  const notes = [];
+  const remark = String(withdraw.comments || withdraw.lastRemarks || '').trim();
+  const description = String(withdraw.description || '').trim();
+  if (remark && !isEmptyDepositText(remark)) {
+    notes.push({ label: 'Remarks', text: truncateDepositListText(remark) });
+  }
+  if (
+    description &&
+    !isEmptyDepositText(description) &&
+    description !== remark
+  ) {
+    notes.push({ label: 'Description', text: truncateDepositListText(description) });
+  }
+  return notes;
+};
+
+export const isMissingWithdrawProfile = withdraw =>
+  !withdraw?.userName || withdraw.userName === '—';

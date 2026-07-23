@@ -16,42 +16,54 @@ import GoldButton from '../components/GoldButton';
 import { BackIcon } from '../components/AdminIcons';
 import { useAdmin } from '../context/AdminContext';
 import {
-  canUserActOnDeposit,
+  canUserActOnWithdraw,
   isPendingAdminQueue,
   isPendingManagerQueue,
   APPROVAL_STAGE_LABELS,
-} from '../constants/depositStatus';
+} from '../constants/withdrawStatus';
 import { adminColors, adminShadow, getInitials } from '../theme/adminTheme';
-import { isEmptyDepositReference, getDisplayPaymentId, getDisplayReferenceNumber, getEditableReferenceNumber, isMissingDepositProfile } from '../../services/adminApi';
+import {
+  isEmptyDepositReference,
+  getDisplayPaymentId,
+  getDisplayReferenceNumber,
+  getEditableReferenceNumber,
+  isMissingWithdrawProfile,
+} from '../../services/adminApi';
 
 const MANAGER_OPTIONS = [
-  { id: 'Approved', label: 'Approve', hint: `${APPROVAL_STAGE_LABELS.ADMIN} approval for this deposit` },
-  { id: 'Rejected', label: 'Reject', hint: 'Reject this deposit request' },
+  { id: 'Approved', label: 'Approve', hint: `${APPROVAL_STAGE_LABELS.ADMIN} approval for this withdraw` },
+  { id: 'Rejected', label: 'Reject', hint: 'Cancel this withdraw request' },
 ];
 
 const ADMIN_OPTIONS = [
-  { id: 'Approved', label: 'Approve', hint: `${APPROVAL_STAGE_LABELS.SUPER_ADMIN} approval — fund will be deposited` },
+  {
+    id: 'Approved',
+    label: 'Approve',
+    hint: `${APPROVAL_STAGE_LABELS.SUPER_ADMIN} approval — funds will be released`,
+  },
   { id: 'SendBack', label: 'Send Back', hint: 'Send back for more information' },
+  { id: 'Rejected', label: 'Reject', hint: 'Cancel and unlock user funds' },
 ];
 
-const resolveStage = (deposit, queueType) => {
+const resolveStage = (withdraw, queueType) => {
   if (queueType === 'pending_manager') return 'manager';
   if (queueType === 'pending_admin') return 'admin';
-  if (isPendingManagerQueue(deposit)) return 'manager';
-  if (isPendingAdminQueue(deposit)) return 'admin';
+  if (isPendingManagerQueue(withdraw)) return 'manager';
+  if (isPendingAdminQueue(withdraw)) return 'admin';
   return null;
 };
 
-const TakeActionScreen = ({ navigation, route }) => {
+const TakeWithdrawActionScreen = ({ navigation, route }) => {
   const insets = useSafeAreaInsets();
-  const { deposits, isManager, isAdmin, isSuperAdmin, getDepositById, submitAction } = useAdmin();
-  const depositId = route.params?.depositId;
+  const { withdraws, isManager, isAdmin, isSuperAdmin, getWithdrawById, submitWithdrawAction } =
+    useAdmin();
+  const withdrawId = route.params?.withdrawId;
   const queueType = route.params?.queueType;
-  const paramDeposit = route.params?.deposit;
-  const cached = paramDeposit || deposits.find(d => d.id === depositId);
-  const [deposit, setDeposit] = React.useState(cached || null);
+  const paramWithdraw = route.params?.withdraw;
+  const cached = paramWithdraw || withdraws.find(d => d.id === withdrawId);
+  const [withdraw, setWithdraw] = React.useState(cached || null);
   const [loading, setLoading] = React.useState(!cached);
-  const stage = deposit ? resolveStage(deposit, queueType) : null;
+  const stage = withdraw ? resolveStage(withdraw, queueType) : null;
   const isManagerStage = stage === 'manager';
   const isAdminStage = stage === 'admin';
   const actionOptions = isManagerStage ? MANAGER_OPTIONS : ADMIN_OPTIONS;
@@ -64,36 +76,36 @@ const TakeActionScreen = ({ navigation, route }) => {
   const [submitError, setSubmitError] = useState('');
 
   const canAct =
-    deposit && canUserActOnDeposit(deposit, { isManager, isAdmin, isSuperAdmin });
+    withdraw && canUserActOnWithdraw(withdraw, { isManager, isAdmin, isSuperAdmin });
 
   React.useEffect(() => {
     let active = true;
     (async () => {
-      if (cached && !isMissingDepositProfile(cached)) {
-        setDeposit(cached);
+      if (cached && !isMissingWithdrawProfile(cached)) {
+        setWithdraw(cached);
         setLoading(false);
         return;
       }
       setLoading(true);
-      const detail = await getDepositById(depositId);
+      const detail = await getWithdrawById(withdrawId);
       if (active) {
-        setDeposit(detail || cached || null);
+        setWithdraw(detail || cached || null);
         setLoading(false);
       }
     })();
     return () => {
       active = false;
     };
-  }, [cached, depositId, getDepositById]);
+  }, [cached, withdrawId, getWithdrawById]);
 
   React.useEffect(() => {
-    if (deposit) {
-      const opts = resolveStage(deposit, queueType) === 'manager' ? MANAGER_OPTIONS : ADMIN_OPTIONS;
+    if (withdraw) {
+      const opts = resolveStage(withdraw, queueType) === 'manager' ? MANAGER_OPTIONS : ADMIN_OPTIONS;
       setSelected(opts[0].id);
-      setReferenceNumber(getEditableReferenceNumber(deposit));
+      setReferenceNumber(getEditableReferenceNumber(withdraw));
       setFieldErrors({});
     }
-  }, [deposit && deposit.id, deposit && deposit.dbStatus, deposit && deposit.approveStatus, queueType]);
+  }, [withdraw && withdraw.id, withdraw && withdraw.dbStatus, withdraw && withdraw.approveStatus, queueType]);
 
   const validateManagerFields = () => {
     const nextErrors = {};
@@ -109,20 +121,17 @@ const TakeActionScreen = ({ navigation, route }) => {
       <AdminScreenLayout>
         <View style={styles.center}>
           <ActivityIndicator color={adminColors.gold} size="large" />
-          <Text style={styles.loadingText}>Loading deposit...</Text>
+          <Text style={styles.loadingText}>Loading withdraw...</Text>
         </View>
       </AdminScreenLayout>
     );
   }
 
-  if (!deposit) {
+  if (!withdraw) {
     return (
       <AdminScreenLayout>
         <View style={styles.center}>
-          <Text style={styles.missing}>Deposit not found.</Text>
-          <Text style={styles.missingHint}>
-            Check that the backend is running and you are logged in.
-          </Text>
+          <Text style={styles.missing}>Withdraw not found.</Text>
         </View>
       </AdminScreenLayout>
     );
@@ -132,9 +141,9 @@ const TakeActionScreen = ({ navigation, route }) => {
     return (
       <AdminScreenLayout>
         <View style={styles.center}>
-          <Text style={styles.missing}>This deposit is not awaiting approval.</Text>
+          <Text style={styles.missing}>This withdraw is not awaiting approval.</Text>
           <Text style={styles.missingHint}>
-            Status: {deposit.dbStatus || '—'} · Approve: {deposit.approveStatus || '—'}
+            Status: {withdraw.dbStatus || '—'} · Approve: {withdraw.approveStatus || '—'}
           </Text>
         </View>
       </AdminScreenLayout>
@@ -148,7 +157,7 @@ const TakeActionScreen = ({ navigation, route }) => {
     return (
       <AdminScreenLayout>
         <View style={styles.center}>
-          <Text style={styles.missing}>You cannot act on this deposit.</Text>
+          <Text style={styles.missing}>You cannot act on this withdraw.</Text>
           <Text style={styles.missingHint}>{roleHint}</Text>
         </View>
       </AdminScreenLayout>
@@ -163,9 +172,9 @@ const TakeActionScreen = ({ navigation, route }) => {
     }
     setSubmitting(true);
     try {
-      const result = await submitAction(deposit, selected, remarks, {
+      const result = await submitWithdrawAction(withdraw, selected, remarks, {
         stage: isManagerStage ? 'manager' : 'admin',
-        refNo: isManagerStage ? referenceNumber.trim() : undefined,
+        refNo: referenceNumber.trim(),
       });
       if (!result || !result.success) {
         setSubmitError((result && result.message) || 'Action failed. Please try again.');
@@ -184,11 +193,11 @@ const TakeActionScreen = ({ navigation, route }) => {
           {
             name: 'ApprovalSuccess',
             params: {
-              depositId: deposit.id,
-              deposit: result.data || deposit,
+              depositId: withdraw.id,
+              deposit: result.data || withdraw,
               action: selected,
               stage: result.stage || (isManagerStage ? 'manager' : 'admin'),
-              kind: 'deposit',
+              kind: 'withdraw',
             },
           },
         ],
@@ -220,20 +229,21 @@ const TakeActionScreen = ({ navigation, route }) => {
           showsVerticalScrollIndicator={false}>
           <View style={styles.summary}>
             <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{getInitials(deposit.userName)}</Text>
+              <Text style={styles.avatarText}>{getInitials(withdraw.userName)}</Text>
             </View>
             <View style={styles.summaryBody}>
-              <Text style={styles.name}>{deposit.userName}</Text>
-              {deposit.email ? <Text style={styles.email}>{deposit.email}</Text> : null}
+              <Text style={styles.name}>{withdraw.userName}</Text>
+              {withdraw.email ? <Text style={styles.email}>{withdraw.email}</Text> : null}
               <Text style={styles.amount}>
-                AED {Number(deposit.amountAed).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                AED{' '}
+                {Number(withdraw.amountAed).toLocaleString('en-US', { minimumFractionDigits: 2 })}
               </Text>
             </View>
           </View>
 
           <View style={styles.readOnlyBlock}>
             <Text style={styles.readOnlyLabel}>Payment ID</Text>
-            <Text style={styles.readOnlyValue}>{getDisplayPaymentId(deposit) || '—'}</Text>
+            <Text style={styles.readOnlyValue}>{getDisplayPaymentId(withdraw) || '—'}</Text>
           </View>
 
           {isManagerStage ? (
@@ -257,9 +267,7 @@ const TakeActionScreen = ({ navigation, route }) => {
           ) : (
             <View style={styles.readOnlyBlock}>
               <Text style={styles.readOnlyLabel}>Reference Number</Text>
-              <Text style={styles.readOnlyValue}>
-                {getDisplayReferenceNumber(deposit)}
-              </Text>
+              <Text style={styles.readOnlyValue}>{getDisplayReferenceNumber(withdraw)}</Text>
             </View>
           )}
 
@@ -347,7 +355,6 @@ const styles = StyleSheet.create({
   summaryBody: { flex: 1 },
   name: { color: adminColors.textPrimary, fontSize: 17, fontWeight: '700' },
   email: { color: adminColors.textMuted, fontSize: 12, marginTop: 2 },
-  ref: { color: adminColors.textMuted, fontSize: 12, marginTop: 2 },
   readOnlyBlock: {
     backgroundColor: adminColors.cardBg,
     borderRadius: 12,
@@ -363,19 +370,13 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-  readOnlyLabelSpaced: { marginTop: 12 },
   readOnlyValue: {
     color: adminColors.textPrimary,
     fontSize: 14,
     fontWeight: '600',
     marginTop: 4,
   },
-  fieldError: {
-    color: '#F87171',
-    fontSize: 12,
-    marginTop: -10,
-    marginBottom: 12,
-  },
+  fieldError: { color: '#F87171', fontSize: 12, marginTop: -10, marginBottom: 12 },
   amount: { color: adminColors.amountGreen, fontSize: 18, fontWeight: '800', marginTop: 6 },
   sectionTitle: {
     color: adminColors.textMuted,
@@ -450,7 +451,12 @@ const styles = StyleSheet.create({
     elevation: 12,
   },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
-  missing: { color: adminColors.textPrimary, fontSize: 16, textAlign: 'center', fontWeight: '600' },
+  missing: {
+    color: adminColors.textPrimary,
+    fontSize: 16,
+    textAlign: 'center',
+    fontWeight: '600',
+  },
   missingHint: {
     color: adminColors.textMuted,
     fontSize: 13,
@@ -461,4 +467,4 @@ const styles = StyleSheet.create({
   loadingText: { color: adminColors.textMuted, fontSize: 14, marginTop: 12 },
 });
 
-export default TakeActionScreen;
+export default TakeWithdrawActionScreen;

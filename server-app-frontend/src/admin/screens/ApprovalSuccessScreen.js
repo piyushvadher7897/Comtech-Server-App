@@ -25,14 +25,24 @@ const formatDate = iso => {
 
 const ApprovalSuccessScreen = ({ navigation, route }) => {
   const insets = useSafeAreaInsets();
-  const { deposits, loadAdminData } = useAdmin();
-  const { depositId, deposit: paramDeposit, action, stage } = route.params || {};
-  const deposit = paramDeposit || deposits.find(d => d.id === depositId);
+  const { deposits, withdraws, loadAdminData, loadWithdrawData } = useAdmin();
+  const { depositId, deposit: paramDeposit, action, stage, kind } = route.params || {};
+  const isWithdraw = kind === 'withdraw';
+  const deposit =
+    paramDeposit ||
+    (isWithdraw
+      ? (withdraws || []).find(d => d.id === depositId)
+      : (deposits || []).find(d => d.id === depositId));
+  const itemLabel = isWithdraw ? 'withdraw' : 'deposit';
 
   const goToDashboard = useCallback(async () => {
-    await loadAdminData({ silent: true, force: true });
+    if (isWithdraw) {
+      if (loadWithdrawData) await loadWithdrawData({ silent: true, force: true });
+    } else {
+      await loadAdminData({ silent: true, force: true });
+    }
     resetToAdminDashboard(navigation);
-  }, [loadAdminData, navigation]);
+  }, [isWithdraw, loadAdminData, loadWithdrawData, navigation]);
 
   useFocusEffect(
     useCallback(() => {
@@ -50,7 +60,7 @@ const ApprovalSuccessScreen = ({ navigation, route }) => {
     if (action === 'Approved' && stage === 'manager') {
       return {
         title: 'Approved!',
-        message: `The deposit request has been approved and sent for ${APPROVAL_STAGE_LABELS.SUPER_ADMIN_APPROVAL}.`,
+        message: `The ${itemLabel} request has been approved and sent for ${APPROVAL_STAGE_LABELS.SUPER_ADMIN_APPROVAL}.`,
         nextStage: APPROVAL_STAGE_LABELS.SUPER_ADMIN_APPROVAL,
         statusLabel: null,
         timeLabel: 'Approved At',
@@ -58,9 +68,10 @@ const ApprovalSuccessScreen = ({ navigation, route }) => {
     }
     if (action === 'Approved') {
       return {
-        title: 'Deposit Completed!',
-        message:
-          'The deposit has been approved and the fund is deposited successfully.',
+        title: isWithdraw ? 'Withdraw Completed!' : 'Deposit Completed!',
+        message: isWithdraw
+          ? 'The withdraw has been approved and funds have been released.'
+          : 'The deposit has been approved and the fund is deposited successfully.',
         nextStage: null,
         statusLabel: APPROVAL_STAGE_LABELS.APPROVED_BY_SUPER_ADMIN,
         timeLabel: 'Approved At',
@@ -69,7 +80,7 @@ const ApprovalSuccessScreen = ({ navigation, route }) => {
     if (action === 'Rejected') {
       return {
         title: 'Rejected',
-        message: 'The deposit request has been rejected.',
+        message: `The ${itemLabel} request has been rejected.`,
         nextStage: null,
         statusLabel: 'Rejected',
         timeLabel: 'Rejected At',
@@ -78,23 +89,25 @@ const ApprovalSuccessScreen = ({ navigation, route }) => {
     if (action === 'SendBack') {
       return {
         title: 'Sent Back',
-        message: 'The deposit request has been sent back for more information.',
-        nextStage: null,
+        message: `The ${itemLabel} request has been sent back for more information.`,
+        nextStage: APPROVAL_STAGE_LABELS.ADMIN_APPROVAL,
         statusLabel: 'Send Back',
         timeLabel: 'Sent Back At',
       };
     }
     return {
-      title: 'Action Submitted',
-      message: 'Your action has been recorded successfully.',
+      title: 'Done',
+      message: `The ${itemLabel} action was completed.`,
       nextStage: null,
       statusLabel: null,
-      timeLabel: 'Timestamp',
+      timeLabel: 'Updated At',
     };
   };
 
   const content = getContent();
-  const lastActivity = deposit?.activity?.[deposit.activity.length - 1];
+  const activity = deposit && deposit.activity;
+  const lastActivity =
+    activity && activity.length > 0 ? activity[activity.length - 1] : null;
 
   return (
     <AdminScreenLayout>
@@ -159,10 +172,19 @@ const ApprovalSuccessScreen = ({ navigation, route }) => {
           title="VIEW DETAILS"
           variant="outline"
           onPress={() =>
-            navigateToAdminScreen(navigation, 'DepositDetail', {
-              depositId: depositId || deposit?.id,
-              deposit,
-            })
+            navigateToAdminScreen(
+              navigation,
+              isWithdraw ? 'WithdrawDetail' : 'DepositDetail',
+              isWithdraw
+                ? {
+                    withdrawId: depositId || (deposit && deposit.id),
+                    withdraw: deposit,
+                  }
+                : {
+                    depositId: depositId || (deposit && deposit.id),
+                    deposit,
+                  },
+            )
           }
           style={styles.btnOutline}
         />

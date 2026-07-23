@@ -41,8 +41,8 @@ export const AdminInput = ({
 
 export const AdminScreenLayout = ({ children }) => (
   <View style={styles.bg}>
-    <View style={styles.glowTop} />
-    <View style={styles.glowBottom} />
+    <View style={styles.glowTop} pointerEvents="none" />
+    <View style={styles.glowBottom} pointerEvents="none" />
     <View style={styles.inner}>{children}</View>
   </View>
 );

@@ -3,11 +3,12 @@ import {Alert} from 'react-native';
 import {useAdmin} from '../context/AdminContext';
 import {
   DEPOSIT_NOTIFICATION_SUCCESS,
+  DEPOSIT_NOTIFICATION_OFF,
   getDepositNotificationErrorMessage,
 } from '../utils/depositNotificationMessages';
 
 /**
- * Shows a one-time alert after OTP login about deposit notification status.
+ * Shows a one-time alert after OTP login about approval notification status.
  */
 const AdminPostLoginNotificationPrompt = () => {
   const {postLoginNotificationResult, clearPostLoginNotificationResult} = useAdmin();
@@ -30,8 +31,8 @@ const AdminPostLoginNotificationPrompt = () => {
     }
 
     Alert.alert(
-      'Deposit alerts are off',
-      `${getDepositNotificationErrorMessage(result)}\n\nYou can turn them on anytime from Home or Profile.`,
+      DEPOSIT_NOTIFICATION_OFF.title,
+      `${getDepositNotificationErrorMessage(result)}\n\n${DEPOSIT_NOTIFICATION_OFF.messageSuffix}`,
       [{text: 'OK'}],
     );
   }, [

@@ -3,11 +3,11 @@ import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import DeviceInfo from 'react-native-device-info';
 import {
-  DEPOSIT_STATUS,
   USER_ROLES,
   STATUS_FILTERS,
   isPendingManagerQueue,
 } from '../constants/depositStatus';
+import { isPendingManagerQueue as isPendingWithdrawManagerQueue } from '../constants/withdrawStatus';
 import { ADMIN_APP_URL } from '../../global/constant';
 import {
   adminLogin,
@@ -25,6 +25,13 @@ import {
   DEPOSIT_LIST_PAGE_SIZE,
   submitDepositPending,
   isMissingDepositProfile,
+  fetchWithdrawsPage,
+  fetchWithdrawStats,
+  fetchWithdrawDetail,
+  submitWithdrawWorkflowAction,
+  mapBackendWithdraw,
+  isMissingWithdrawProfile,
+  WITHDRAW_LIST_PAGE_SIZE,
 } from '../../services/adminApi';
 import {
   ADMIN_SESSION_KEY,
@@ -65,6 +72,21 @@ export const AdminProvider = ({ children }) => {
   const [loadingMore, setLoadingMore] = useState(false);
   const [depositDateRange, setDepositDateRange] = useState(() => getWebAdminDateRange());
   const [statusFilter, setStatusFilter] = useState(STATUS_FILTERS.ALL);
+  const [withdraws, setWithdraws] = useState([]);
+  const [withdrawTotal, setWithdrawTotal] = useState(0);
+  const [withdrawPage, setWithdrawPage] = useState(1);
+  const [hasMoreWithdraws, setHasMoreWithdraws] = useState(false);
+  const [loadingMoreWithdraws, setLoadingMoreWithdraws] = useState(false);
+  const [withdrawDateRange, setWithdrawDateRange] = useState(() => getWebAdminDateRange());
+  const [withdrawStatusFilter, setWithdrawStatusFilter] = useState(STATUS_FILTERS.ALL);
+  const [withdrawStats, setWithdrawStats] = useState({
+    pendingManager: 0,
+    pendingAdmin: 0,
+    totalPending: 0,
+  });
+  const [loadingWithdraws, setLoadingWithdraws] = useState(false);
+  const [refreshingWithdraws, setRefreshingWithdraws] = useState(false);
+  const [withdrawError, setWithdrawError] = useState(null);
   const [stats, setStats] = useState({
     pendingManager: 0,
     pendingAdmin: 0,
@@ -85,8 +107,14 @@ export const AdminProvider = ({ children }) => {
   depositDateRangeRef.current = depositDateRange;
   const statusFilterRef = useRef(statusFilter);
   statusFilterRef.current = statusFilter;
+  const withdrawDateRangeRef = useRef(withdrawDateRange);
+  withdrawDateRangeRef.current = withdrawDateRange;
+  const withdrawStatusFilterRef = useRef(withdrawStatusFilter);
+  withdrawStatusFilterRef.current = withdrawStatusFilter;
   const lastFetchAtRef = useRef(0);
+  const lastWithdrawFetchAtRef = useRef(0);
   const fetchInFlightRef = useRef(null);
+  const withdrawFetchInFlightRef = useRef(null);
 
   const clearPendingLogin = useCallback(() => setPendingLogin(null), []);
 
@@ -100,12 +128,22 @@ export const AdminProvider = ({ children }) => {
 
   const refreshStats = useCallback(async () => {
     try {
-      const data = await fetchDepositStats();
+      const [depositData, withdrawData] = await Promise.all([
+        fetchDepositStats(),
+        fetchWithdrawStats().catch(() => null),
+      ]);
       setStats({
-        pendingManager: data.pendingManager || 0,
-        pendingAdmin: data.pendingAdmin || 0,
-        totalPending: data.totalPending || 0,
+        pendingManager: depositData.pendingManager || 0,
+        pendingAdmin: depositData.pendingAdmin || 0,
+        totalPending: depositData.totalPending || 0,
       });
+      if (withdrawData) {
+        setWithdrawStats({
+          pendingManager: withdrawData.pendingManager || 0,
+          pendingAdmin: withdrawData.pendingAdmin || 0,
+          totalPending: withdrawData.totalPending || 0,
+        });
+      }
     } catch {
       // keep previous stats
     }
@@ -211,16 +249,149 @@ export const AdminProvider = ({ children }) => {
     await refreshDeposits({ silent: true, dateRange: range, statusFilter: STATUS_FILTERS.ALL, force: true });
   }, [refreshDeposits]);
 
+  const refreshWithdraws = useCallback(
+    async ({
+      silent = false,
+      dateRange,
+      statusFilter: nextStatusFilter,
+      force = false,
+    } = {}) => {
+      const range = dateRange || withdrawDateRangeRef.current || getWebAdminDateRange();
+      const activeStatusFilter =
+        nextStatusFilter !== undefined ? nextStatusFilter : withdrawStatusFilterRef.current;
+
+      if (!force && withdrawFetchInFlightRef.current) {
+        return withdrawFetchInFlightRef.current;
+      }
+
+      if (silent) {
+        setRefreshingWithdraws(true);
+      } else {
+        setLoadingWithdraws(true);
+      }
+      setWithdrawError(null);
+
+      const run = (async () => {
+        try {
+          const result = await fetchWithdrawsPage({
+            ...range,
+            page: 1,
+            limit: WITHDRAW_LIST_PAGE_SIZE,
+            statusFilter: activeStatusFilter,
+          });
+          setWithdraws(result.docs || []);
+          setWithdrawPage(1);
+          setHasMoreWithdraws(Boolean(result.hasNextPage));
+          setWithdrawTotal(result.totalDocs ?? (result.docs || []).length);
+          const nextRange =
+            result.startDate && result.endDate
+              ? { startDate: result.startDate, endDate: result.endDate }
+              : range;
+          if (!sameDateRange(withdrawDateRangeRef.current, nextRange)) {
+            setWithdrawDateRange(nextRange);
+          }
+          if (nextStatusFilter !== undefined) {
+            setWithdrawStatusFilter(nextStatusFilter);
+          }
+          lastWithdrawFetchAtRef.current = Date.now();
+        } catch (err) {
+          setWithdrawError(formatApiError(err));
+        } finally {
+          setLoadingWithdraws(false);
+          setRefreshingWithdraws(false);
+          withdrawFetchInFlightRef.current = null;
+        }
+      })();
+
+      withdrawFetchInFlightRef.current = run;
+      return run;
+    },
+    [],
+  );
+
+  const loadMoreWithdraws = useCallback(async () => {
+    if (loadingMoreWithdraws || !hasMoreWithdraws) return;
+    setLoadingMoreWithdraws(true);
+    setWithdrawError(null);
+    const range = withdrawDateRangeRef.current || getWebAdminDateRange();
+    try {
+      const nextPage = withdrawPage + 1;
+      const result = await fetchWithdrawsPage({
+        ...range,
+        page: nextPage,
+        limit: WITHDRAW_LIST_PAGE_SIZE,
+        statusFilter: withdrawStatusFilterRef.current,
+      });
+      setWithdraws(prev => {
+        const seen = new Set(prev.map(d => d.id));
+        const merged = [...prev];
+        (result.docs || []).forEach(doc => {
+          if (!seen.has(doc.id)) merged.push(doc);
+        });
+        return merged;
+      });
+      setWithdrawPage(nextPage);
+      setHasMoreWithdraws(Boolean(result.hasNextPage));
+      if (result.totalDocs != null) setWithdrawTotal(result.totalDocs);
+    } catch (err) {
+      setWithdrawError(formatApiError(err));
+    } finally {
+      setLoadingMoreWithdraws(false);
+    }
+  }, [withdrawPage, hasMoreWithdraws, loadingMoreWithdraws]);
+
+  const applyWithdrawFilters = useCallback(
+    async ({ statusFilter: nextStatusFilter, startDate, endDate }) => {
+      const range = { startDate, endDate };
+      setWithdrawStatusFilter(nextStatusFilter ?? STATUS_FILTERS.ALL);
+      setWithdrawDateRange(range);
+      await refreshWithdraws({
+        silent: true,
+        dateRange: range,
+        statusFilter: nextStatusFilter,
+        force: true,
+      });
+    },
+    [refreshWithdraws],
+  );
+
+  const resetWithdrawFilters = useCallback(async () => {
+    const range = getWebAdminDateRange();
+    setWithdrawStatusFilter(STATUS_FILTERS.ALL);
+    setWithdrawDateRange(range);
+    await refreshWithdraws({
+      silent: true,
+      dateRange: range,
+      statusFilter: STATUS_FILTERS.ALL,
+      force: true,
+    });
+  }, [refreshWithdraws]);
+
+  const loadWithdrawData = useCallback(
+    async ({ silent = false, force = false } = {}) => {
+      const now = Date.now();
+      if (!force && now - lastWithdrawFetchAtRef.current < AUTO_REFRESH_MS) {
+        return;
+      }
+      await Promise.all([refreshWithdraws({ silent, force }), refreshStats()]);
+    },
+    [refreshWithdraws, refreshStats],
+  );
+
   const loadAdminData = useCallback(
     async ({ silent = false, force = false } = {}) => {
       const now = Date.now();
       if (!force && now - lastFetchAtRef.current < AUTO_REFRESH_MS) {
         return;
       }
-      await Promise.all([refreshDeposits({ silent, force }), refreshStats()]);
+      await Promise.all([
+        refreshDeposits({ silent, force }),
+        refreshWithdraws({ silent, force }),
+        refreshStats(),
+      ]);
       syncAdminFcmToken().catch(() => {});
     },
-    [refreshDeposits, refreshStats],
+    [refreshDeposits, refreshWithdraws, refreshStats],
   );
 
   const normalizeLoginIdentifier = value => {
@@ -354,6 +525,9 @@ export const AdminProvider = ({ children }) => {
     setDeposits([]);
     setDepositPage(1);
     setHasMoreDeposits(false);
+    setWithdraws([]);
+    setWithdrawPage(1);
+    setHasMoreWithdraws(false);
     setPendingLogin(null);
     await clearAdminAuthStorage();
   }, []);
@@ -412,13 +586,38 @@ export const AdminProvider = ({ children }) => {
     [deposits],
   );
 
+  const getWithdrawById = useCallback(
+    async withdrawId => {
+      const cached = withdraws.find(d => d.id === withdrawId);
+      if (cached && !isMissingWithdrawProfile(cached)) return cached;
+      try {
+        const detail = await fetchWithdrawDetail(withdrawId);
+        if (!detail) return cached || null;
+        if (cached && isMissingWithdrawProfile(detail) && !isMissingWithdrawProfile(cached)) {
+          return cached;
+        }
+        return detail;
+      } catch {
+        return cached || null;
+      }
+    },
+    [withdraws],
+  );
+
   const submitAction = useCallback(
     async (deposit, selectedStatus, remarks, meta = {}) => {
       setError(null);
-      const isManagerStage = isPendingManagerQueue(deposit);
+      const stageHint = meta.stage;
+      const isManagerStage =
+        stageHint === 'manager'
+          ? true
+          : stageHint === 'admin'
+            ? false
+            : isPendingManagerQueue(deposit);
       try {
         let record;
         let workflowStatus;
+        const depositId = deposit.id || (deposit._raw && deposit._raw._id);
 
         if (isManagerStage) {
           record = await submitDepositPending(deposit, selectedStatus, remarks, {
@@ -426,17 +625,22 @@ export const AdminProvider = ({ children }) => {
             paymentId: meta.paymentId,
           });
         } else {
-          const result = await submitWorkflowAction(deposit, selectedStatus, remarks);
+          const result = await submitWorkflowAction(
+            { ...deposit, id: depositId },
+            selectedStatus,
+            remarks,
+          );
           record = result.record;
           workflowStatus = result.workflowStatus;
         }
 
-        const updated = record?._id || record?.status
-          ? mapBackendDeposit(
-              workflowStatus ? { ...record, workflowStatus } : record,
-              deposit._raw?.user,
-            )
-          : null;
+        const updated =
+          record && (record._id || record.status)
+            ? mapBackendDeposit(
+                workflowStatus ? { ...record, workflowStatus } : record,
+                deposit._raw && deposit._raw.user,
+              )
+            : null;
 
         if (updated) {
           const amountsLookConverted =
@@ -468,7 +672,68 @@ export const AdminProvider = ({ children }) => {
     [loadAdminData],
   );
 
-  const computedStats = useMemo(() => stats, [stats]);
+  const submitWithdrawAction = useCallback(
+    async (withdraw, selectedStatus, remarks, meta = {}) => {
+      setWithdrawError(null);
+      const stageHint = meta.stage;
+      const isManagerStage =
+        stageHint === 'manager'
+          ? true
+          : stageHint === 'admin'
+            ? false
+            : isPendingWithdrawManagerQueue(withdraw);
+      try {
+        const withdrawId = withdraw.id || (withdraw._raw && withdraw._raw._id);
+        const result = await submitWithdrawWorkflowAction(
+          { ...withdraw, id: withdrawId },
+          selectedStatus,
+          remarks,
+          meta,
+        );
+        const record = result.record;
+        const workflowStatus = result.workflowStatus;
+
+        const updated =
+          record && (record._id || record.status)
+            ? mapBackendWithdraw(
+                workflowStatus ? { ...record, workflowStatus } : record,
+                withdraw._raw && withdraw._raw.user,
+              )
+            : null;
+
+        if (updated) {
+          const enriched = {
+            ...withdraw,
+            ...updated,
+            userName: isMissingWithdrawProfile(updated) ? withdraw.userName : updated.userName,
+            email: updated.email || withdraw.email,
+          };
+          setWithdraws(prev => prev.map(d => (d.id === withdraw.id ? enriched : d)));
+          await loadWithdrawData({ silent: true, force: true });
+          return { success: true, data: enriched, stage: isManagerStage ? 'manager' : 'admin' };
+        }
+        await loadWithdrawData({ silent: true, force: true });
+        return { success: true, data: withdraw, stage: isManagerStage ? 'manager' : 'admin' };
+      } catch (err) {
+        const message = formatApiError(err) || 'Action failed';
+        setWithdrawError(message);
+        return { success: false, message };
+      }
+    },
+    [loadWithdrawData],
+  );
+
+  const computedStats = useMemo(() => {
+    const depositPending = stats.totalPending || 0;
+    const withdrawPending = withdrawStats.totalPending || 0;
+    return {
+      ...stats,
+      withdrawPendingManager: withdrawStats.pendingManager || 0,
+      withdrawPendingAdmin: withdrawStats.pendingAdmin || 0,
+      withdrawTotalPending: withdrawPending,
+      combinedTotalPending: depositPending + withdrawPending,
+    };
+  }, [stats, withdrawStats]);
 
   const value = useMemo(
     () => ({
@@ -480,6 +745,17 @@ export const AdminProvider = ({ children }) => {
       loadingMore,
       depositDateRange,
       statusFilter,
+      withdraws,
+      withdrawTotal,
+      withdrawPage,
+      hasMoreWithdraws,
+      loadingMoreWithdraws,
+      withdrawDateRange,
+      withdrawStatusFilter,
+      withdrawStats,
+      loadingWithdraws,
+      refreshingWithdraws,
+      withdrawError,
       stats: computedStats,
       loading,
       refreshing,
@@ -496,13 +772,20 @@ export const AdminProvider = ({ children }) => {
       logout,
       restoreSession,
       refreshDeposits,
+      refreshWithdraws,
       refreshStats,
       loadMoreDeposits,
+      loadMoreWithdraws,
       applyDepositFilters,
       resetDepositFilters,
+      applyWithdrawFilters,
+      resetWithdrawFilters,
       loadAdminData,
+      loadWithdrawData,
       getDepositById,
+      getWithdrawById,
       submitAction,
+      submitWithdrawAction,
       isManager: user?.role === USER_ROLES.MANAGER,
       isAdmin: user?.role === USER_ROLES.ADMIN,
       isSuperAdmin: user?.isSuperAdmin === true,
@@ -516,6 +799,17 @@ export const AdminProvider = ({ children }) => {
       loadingMore,
       depositDateRange,
       statusFilter,
+      withdraws,
+      withdrawTotal,
+      withdrawPage,
+      hasMoreWithdraws,
+      loadingMoreWithdraws,
+      withdrawDateRange,
+      withdrawStatusFilter,
+      withdrawStats,
+      loadingWithdraws,
+      refreshingWithdraws,
+      withdrawError,
       computedStats,
       loading,
       refreshing,
@@ -527,13 +821,20 @@ export const AdminProvider = ({ children }) => {
       logout,
       restoreSession,
       refreshDeposits,
+      refreshWithdraws,
       refreshStats,
       loadMoreDeposits,
+      loadMoreWithdraws,
       applyDepositFilters,
       resetDepositFilters,
+      applyWithdrawFilters,
+      resetWithdrawFilters,
       loadAdminData,
+      loadWithdrawData,
       getDepositById,
+      getWithdrawById,
       submitAction,
+      submitWithdrawAction,
     ],
   );
 

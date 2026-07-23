@@ -1,5 +1,3 @@
-import { Platform } from 'react-native';
-
 // ─── Server Side tab (prices, socket, server status, notifications) ───
 // Always production — independent of Admin Side local dev settings.
 const SERVER_PROD_URL = 'https://appapi.comtechgold.com';
@@ -20,10 +18,8 @@ const getLocalAdminUrl = () => {
   if (ADMIN_LOCAL_HOST) {
     return `http://${ADMIN_LOCAL_HOST}:${ADMIN_LOCAL_PORT}`;
   }
-  if (Platform.OS === 'android') {
-    // return `http://192.168.1.5:${ADMIN_LOCAL_PORT}`;
-  }
-  return `http://localhost:${ADMIN_LOCAL_PORT}`;
+  // Same remote admin host for Android and iOS
+  return `http://10.45.192.130:${ADMIN_LOCAL_PORT}`;
 };
 
 // Server Side — always uses production/remote backend (prices, status socket, notifications)
@@ -33,8 +29,8 @@ export const Shoket_URL = SERVER_SOCKET_PROD;
 // Admin Side — remote test server in dev + release (when ADMIN_USE_REMOTE_TEST), else production
 // export const ADMIN_APP_URL =
 //   __DEV__ || ADMIN_USE_REMOTE_TEST ? getLocalAdminUrl() : ADMIN_PROD_URL;
-export const ADMIN_APP_URL = ADMIN_PROD_URL;
-// export const ADMIN_APP_URL = getLocalAdminUrl();
+// export const ADMIN_APP_URL = ADMIN_PROD_URL;
+export const ADMIN_APP_URL = getLocalAdminUrl();
 
 // Sent on all Admin Side API calls so backend can:
 // 1) identify this as the internal Server App

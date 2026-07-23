@@ -53,9 +53,23 @@ api.interceptors.response.use(
           : `Bearer ${result.token}`;
         return api(originalRequest);
       }
+
+      // Refresh failed — session is dead; sign out once.
+      if (!handling401) {
+        handling401 = true;
+        try {
+          await handleAdminUnauthorized();
+        } finally {
+          setTimeout(() => {
+            handling401 = false;
+          }, 500);
+        }
+      }
+      return Promise.reject(error);
     }
 
-    if (status === 401 && !isRefreshCall && !handling401) {
+    // Auth refresh endpoint itself rejected — clear session.
+    if (status === 401 && isRefreshCall && !handling401) {
       handling401 = true;
       try {
         await handleAdminUnauthorized();

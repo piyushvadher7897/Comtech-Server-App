@@ -16,7 +16,11 @@ import DepositStatusBadge from '../components/DepositStatusBadge';
 import { ChevronRightIcon, SearchIcon } from '../components/AdminIcons';
 import { useAdmin } from '../context/AdminContext';
 import { navigateToAdminScreen, navigateToAdminProfile } from '../utils/navigation';
-import { fetchApprovalQueue, getDisplayReferenceNumber } from '../../services/adminApi';
+import {
+  fetchApprovalQueue,
+  fetchWithdrawApprovalQueue,
+  getDisplayReferenceNumber,
+} from '../../services/adminApi';
 import { ADMIN_APP_URL } from '../../global/constant';
 import { adminColors, adminShadow } from '../theme/adminTheme';
 import AdminSegmentedTabs from '../components/AdminSegmentedTabs';
@@ -40,6 +44,11 @@ const TABS = {
   ADMIN: 'pending_admin',
 };
 
+const KIND = {
+  DEPOSIT: 'deposit',
+  WITHDRAW: 'withdraw',
+};
+
 const AdminApprovalsScreen = ({ navigation, route }) => {
   const insets = useSafeAreaInsets();
   const { isManager, isSuperAdmin, isAdmin, user, stats, refreshStats } = useAdmin();
@@ -53,6 +62,7 @@ const AdminApprovalsScreen = ({ navigation, route }) => {
 
   const defaultTab = resolveDefaultTab();
   const [activeTab, setActiveTab] = useState(route.params?.initialTab || defaultTab);
+  const [kind, setKind] = useState(route.params?.kind || KIND.DEPOSIT);
   const [queue, setQueue] = useState([]);
   const [search, setSearch] = useState('');
   const [refreshing, setRefreshing] = useState(false);
@@ -68,41 +78,76 @@ const AdminApprovalsScreen = ({ navigation, route }) => {
         id: TABS.MANAGER,
         label: APPROVAL_STAGE_LABELS.ADMIN,
         variant: 'manager',
-        count: stats.pendingManager,
+        count:
+          kind === KIND.WITHDRAW
+            ? stats.withdrawPendingManager
+            : stats.pendingManager,
       },
       {
         id: TABS.ADMIN,
         label: APPROVAL_STAGE_LABELS.SUPER_ADMIN,
         variant: 'admin',
-        count: stats.pendingAdmin,
+        count:
+          kind === KIND.WITHDRAW ? stats.withdrawPendingAdmin : stats.pendingAdmin,
       },
     ],
-    [stats.pendingAdmin, stats.pendingManager],
+    [
+      kind,
+      stats.pendingAdmin,
+      stats.pendingManager,
+      stats.withdrawPendingAdmin,
+      stats.withdrawPendingManager,
+    ],
   );
 
-  const loadQueue = useCallback(async (silent = false) => {
-    if (!silent) setRefreshing(true);
-    setError('');
-    try {
-      const workflow = isManager && !isSuperAdmin && !isAdmin ? TABS.MANAGER : activeTab;
-      const result = await fetchApprovalQueue(workflow);
-      setQueue(result.docs || []);
-    } catch (err) {
-      setError(err.message || 'Failed to load approval queue');
-    } finally {
-      setRefreshing(false);
-    }
-  }, [activeTab, isAdmin, isManager, isSuperAdmin]);
+  const kindTabs = useMemo(
+    () => [
+      {
+        id: KIND.DEPOSIT,
+        label: 'Deposit',
+        variant: 'neutral',
+        count: stats.totalPending,
+      },
+      {
+        id: KIND.WITHDRAW,
+        label: 'Withdraw',
+        variant: 'neutral',
+        count: stats.withdrawTotalPending,
+      },
+    ],
+    [stats.totalPending, stats.withdrawTotalPending],
+  );
+
+  const loadQueue = useCallback(
+    async (silent = false) => {
+      if (!silent) setRefreshing(true);
+      setError('');
+      try {
+        const workflow = isManager && !isSuperAdmin && !isAdmin ? TABS.MANAGER : activeTab;
+        const result =
+          kind === KIND.WITHDRAW
+            ? await fetchWithdrawApprovalQueue(workflow)
+            : await fetchApprovalQueue(workflow);
+        setQueue(result.docs || []);
+      } catch (err) {
+        setError(err.message || 'Failed to load approval queue');
+      } finally {
+        setRefreshing(false);
+      }
+    },
+    [activeTab, isAdmin, isManager, isSuperAdmin, kind],
+  );
 
   useEffect(() => {
     loadQueue(true);
   }, [loadQueue]);
 
   useEffect(() => {
-    if (!route.params?.initialTab) return;
-    setActiveTab(route.params.initialTab);
-    navigation.setParams({ initialTab: undefined });
-  }, [navigation, route.params?.initialTab]);
+    if (!route.params?.initialTab && !route.params?.kind) return;
+    if (route.params?.initialTab) setActiveTab(route.params.initialTab);
+    if (route.params?.kind) setKind(route.params.kind);
+    navigation.setParams({ initialTab: undefined, kind: undefined });
+  }, [navigation, route.params?.initialTab, route.params?.kind]);
 
   useFocusEffect(
     useCallback(() => {
@@ -116,8 +161,8 @@ const AdminApprovalsScreen = ({ navigation, route }) => {
     if (!q) return queue;
     return queue.filter(
       d =>
-        d.userName.toLowerCase().includes(q) ||
-        d.referenceNumber.toLowerCase().includes(q) ||
+        (d.userName || '').toLowerCase().includes(q) ||
+        (d.referenceNumber || '').toLowerCase().includes(q) ||
         (d.email && d.email.toLowerCase().includes(q)),
     );
   }, [queue, search]);
@@ -126,11 +171,17 @@ const AdminApprovalsScreen = ({ navigation, route }) => {
     <TouchableOpacity
       style={styles.card}
       onPress={() =>
-        navigateToAdminScreen(navigation, 'TakeAction', {
-          depositId: item.id,
-          deposit: item,
-          queueType: activeTab,
-        })
+        kind === KIND.WITHDRAW
+          ? navigateToAdminScreen(navigation, 'TakeWithdrawAction', {
+              withdrawId: item.id,
+              withdraw: item,
+              queueType: activeTab,
+            })
+          : navigateToAdminScreen(navigation, 'TakeAction', {
+              depositId: item.id,
+              deposit: item,
+              queueType: activeTab,
+            })
       }
       activeOpacity={0.85}>
       <View style={styles.cardMain}>
@@ -154,12 +205,33 @@ const AdminApprovalsScreen = ({ navigation, route }) => {
     <AdminScreenLayout>
       <AdminHeader
         userName={user?.name}
+        title="Approvals"
         compact
         onProfilePress={() => navigateToAdminProfile(navigation)}
       />
 
+      <View style={styles.tabWrap}>
+        <AdminSegmentedTabs tabs={kindTabs} activeId={kind} onChange={setKind} />
+      </View>
+
+      <View
+        style={[
+          styles.kindBanner,
+          kind === KIND.WITHDRAW ? styles.kindBannerWithdraw : styles.kindBannerDeposit,
+        ]}>
+        <Text
+          style={[
+            styles.kindBannerText,
+            kind === KIND.WITHDRAW ? styles.kindBannerTextWithdraw : styles.kindBannerTextDeposit,
+          ]}>
+          {kind === KIND.WITHDRAW
+            ? 'Showing withdraw approvals only'
+            : 'Showing deposit approvals only'}
+        </Text>
+      </View>
+
       {(isSuperAdmin || isAdmin) && (
-        <View style={styles.tabWrap}>
+        <View style={[styles.tabWrap, styles.tabWrapTight]}>
           <AdminSegmentedTabs
             tabs={approvalTabs}
             activeId={activeTab}
@@ -180,25 +252,11 @@ const AdminApprovalsScreen = ({ navigation, route }) => {
       </View>
 
       <Text style={styles.countLine}>
-        {filtered.length} pending ·{' '}
+        {filtered.length} pending · {kind === KIND.WITHDRAW ? 'Withdraw' : 'Deposit'} ·{' '}
         {activeTab === TABS.ADMIN
           ? APPROVAL_STAGE_LABELS.SUPER_ADMIN_QUEUE
           : APPROVAL_STAGE_LABELS.ADMIN_QUEUE}
       </Text>
-
-      {(isSuperAdmin || isAdmin) &&
-      stats.pendingManager > 0 &&
-      activeTab === TABS.ADMIN &&
-      filtered.length === 0 ? (
-        <TouchableOpacity
-          style={styles.switchTabHint}
-          onPress={() => handleTabChange(TABS.MANAGER)}>
-          <Text style={styles.switchTabHintText}>
-            {stats.pendingManager} awaiting {APPROVAL_STAGE_LABELS.ADMIN.toLowerCase()} approval — tap to open{' '}
-            {APPROVAL_STAGE_LABELS.ADMIN_APPROVAL}
-          </Text>
-        </TouchableOpacity>
-      ) : null}
 
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
@@ -221,17 +279,17 @@ const AdminApprovalsScreen = ({ navigation, route }) => {
                 ? 'Loading...'
                 : error
                   ? 'Could not load approvals'
-                  : 'No pending approvals in this queue.'}
+                  : `No pending ${kind} approvals in this queue.`}
             </Text>
             {!refreshing && !error ? (
               <Text style={styles.emptyHint}>
-                Try the other tab ({APPROVAL_STAGE_LABELS.ADMIN} / {APPROVAL_STAGE_LABELS.SUPER_ADMIN}{' '}
-                Approval), or check web admin for pending deposits.
+                Try the other tab, or open Funds for the full list.
               </Text>
             ) : null}
             {error ? (
               <Text style={styles.emptyHint}>
-                {error}{'\n'}API: {ADMIN_APP_URL}
+                {error}
+                {'\n'}API: {ADMIN_APP_URL}
               </Text>
             ) : null}
           </View>
@@ -243,6 +301,30 @@ const AdminApprovalsScreen = ({ navigation, route }) => {
 
 const styles = StyleSheet.create({
   tabWrap: { marginHorizontal: 16, marginBottom: 12, marginTop: 12 },
+  tabWrapTight: { marginTop: 0 },
+  kindBanner: {
+    marginHorizontal: 16,
+    marginBottom: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  kindBannerDeposit: {
+    backgroundColor: 'rgba(52, 211, 153, 0.12)',
+    borderColor: 'rgba(52, 211, 153, 0.28)',
+  },
+  kindBannerWithdraw: {
+    backgroundColor: 'rgba(251, 146, 60, 0.12)',
+    borderColor: 'rgba(251, 146, 60, 0.28)',
+  },
+  kindBannerText: {
+    fontSize: 12,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  kindBannerTextDeposit: { color: '#34D399' },
+  kindBannerTextWithdraw: { color: '#FB923C' },
   searchWrap: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -261,21 +343,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     marginHorizontal: 16,
     marginBottom: 10,
-  },
-  switchTabHint: {
-    marginHorizontal: 16,
-    marginBottom: 10,
-    padding: 12,
-    borderRadius: 10,
-    backgroundColor: 'rgba(234, 88, 12, 0.15)',
-    borderWidth: 1,
-    borderColor: 'rgba(251, 146, 60, 0.4)',
-  },
-  switchTabHintText: {
-    color: '#FB923C',
-    fontSize: 12,
-    fontWeight: '700',
-    textAlign: 'center',
   },
   tapHint: {
     color: adminColors.gold,

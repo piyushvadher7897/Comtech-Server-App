@@ -133,26 +133,30 @@ export const canUserActOnDeposit = (deposit, { isManager, isAdmin, isSuperAdmin 
 
 export const isPendingManagerQueue = deposit => {
   if (!deposit || isDepositActionDisabled(deposit)) return false;
+  if (deposit.status === DEPOSIT_STATUS.PENDING_ADMIN) return false;
   if (isAdminFinalStage(deposit)) return false;
 
   const dbStatus = normStatus(deposit.dbStatus);
   const approveStatus = normStatus(deposit.approveStatus);
 
+  // Already past Admin approval → Super Admin queue
   if (approveStatus === 'approve' && dbStatus === 'pending') return false;
 
   if (deposit.status === DEPOSIT_STATUS.SEND_BACK) return true;
+  if (deposit.status === DEPOSIT_STATUS.PENDING_MANAGER) return true;
 
   return (
     dbStatus === 'pending' ||
     dbStatus === 'sendback' ||
     approveStatus === 'sendback' ||
-    approveStatus === 'pending' ||
-    approveStatus === ''
+    ((approveStatus === 'pending' || approveStatus === '') && dbStatus !== 'approved')
   );
 };
 
 export const isPendingAdminQueue = deposit => {
   if (!deposit || isDepositActionDisabled(deposit)) return false;
+
+  if (deposit.status === DEPOSIT_STATUS.PENDING_ADMIN) return true;
 
   const dbStatus = normStatus(deposit.dbStatus);
   const approveStatus = normStatus(deposit.approveStatus);

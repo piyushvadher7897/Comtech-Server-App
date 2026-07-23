@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  TouchableOpacity,
+  Pressable,
   Text,
   StyleSheet,
   ActivityIndicator,
@@ -9,23 +9,33 @@ import { adminColors } from '../theme/adminTheme';
 
 const GoldButton = ({ title, onPress, disabled, loading, variant = 'primary', style }) => {
   const isOutline = variant === 'outline';
+  const isDisabled = Boolean(disabled || loading);
+
   return (
-    <TouchableOpacity
-      style={[
+    <Pressable
+      style={({ pressed }) => [
         styles.button,
         isOutline && styles.buttonOutline,
-        disabled && styles.buttonDisabled,
+        isDisabled && styles.buttonDisabled,
+        pressed && !isDisabled && styles.buttonPressed,
         style,
       ]}
       onPress={onPress}
-      disabled={disabled || loading}
-      activeOpacity={0.85}>
+      disabled={isDisabled}
+      hitSlop={8}
+      android_ripple={
+        isOutline
+          ? { color: 'rgba(212, 175, 55, 0.18)' }
+          : { color: 'rgba(26, 18, 8, 0.12)' }
+      }
+      accessibilityRole="button"
+      accessibilityState={{ disabled: isDisabled, busy: Boolean(loading) }}>
       {loading ? (
         <ActivityIndicator color={isOutline ? adminColors.gold : '#1a1208'} />
       ) : (
         <Text style={[styles.text, isOutline && styles.textOutline]}>{title}</Text>
       )}
-    </TouchableOpacity>
+    </Pressable>
   );
 };
 
@@ -43,6 +53,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 8,
     elevation: 6,
+    minHeight: 54,
   },
   buttonOutline: {
     backgroundColor: 'transparent',
@@ -52,6 +63,9 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.55,
+  },
+  buttonPressed: {
+    opacity: 0.88,
   },
   text: {
     color: '#1a1208',

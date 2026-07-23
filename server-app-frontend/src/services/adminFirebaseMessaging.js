@@ -8,7 +8,7 @@ import axios from 'axios';
 import {PermissionsAndroid, Platform} from 'react-native';
 import {ADMIN_APP_URL, SERVER_APP_HEADERS} from '../global/constant';
 import {ADMIN_TOKEN_KEY} from './adminTokenRefresh';
-import {handleFundDepositNotification} from '../admin/utils/adminNotificationNavigation';
+import {handleFundDepositNotification, handleFundWithdrawNotification} from '../admin/utils/adminNotificationNavigation';
 
 const ADMIN_DEVICE_TOKEN_KEY = 'admin_fcm_token';
 const ADMIN_TOKEN_STORED_KEY = 'admin_token_stored';
@@ -133,10 +133,15 @@ export const setupAdminNotificationHandlers = (onDepositNotification, lastMessag
   const handleMessage = remoteMessage => {
     const type = remoteMessage?.data?.type;
     const isDeposit = type === 'fund_deposit_pending';
+    const isWithdraw = type === 'fund_withdraw_pending';
 
     if (isDeposit) {
       console.log(LOG, 'Fund deposit push:', remoteMessage?.notification?.title);
       handleFundDepositNotification(remoteMessage);
+      onDepositNotification?.(remoteMessage);
+    } else if (isWithdraw) {
+      console.log(LOG, 'Fund withdraw push:', remoteMessage?.notification?.title);
+      handleFundWithdrawNotification(remoteMessage);
       onDepositNotification?.(remoteMessage);
     }
   };

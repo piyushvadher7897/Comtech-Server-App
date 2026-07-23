@@ -4,6 +4,7 @@ import {useAdmin} from '../context/AdminContext';
 import {navigateToAdminScreen} from '../utils/navigation';
 import {
   consumePendingDepositNavigation,
+  consumePendingWithdrawNavigation,
   setAdminNotificationNavigationHandler,
 } from '../utils/adminNotificationNavigation';
 
@@ -17,16 +18,30 @@ const AdminNotificationHandler = () => {
       return undefined;
     }
 
-    const openDeposit = depositId => {
-      if (!depositId) return;
-      navigateToAdminScreen(navigation, 'DepositDetail', {depositId});
+    const openFromNotification = payload => {
+      if (!payload) return;
+      if (typeof payload === 'string') {
+        navigateToAdminScreen(navigation, 'DepositDetail', {depositId: payload});
+        return;
+      }
+      if (payload.type === 'withdraw') {
+        navigateToAdminScreen(navigation, 'WithdrawDetail', {
+          withdrawId: payload.id,
+        });
+        return;
+      }
+      navigateToAdminScreen(navigation, 'DepositDetail', {depositId: payload.id});
     };
 
-    setAdminNotificationNavigationHandler(openDeposit);
+    setAdminNotificationNavigationHandler(openFromNotification);
 
     const pendingDepositId = consumePendingDepositNavigation();
     if (pendingDepositId) {
-      openDeposit(pendingDepositId);
+      openFromNotification({type: 'deposit', id: pendingDepositId});
+    }
+    const pendingWithdrawId = consumePendingWithdrawNavigation();
+    if (pendingWithdrawId) {
+      openFromNotification({type: 'withdraw', id: pendingWithdrawId});
     }
 
     return () => {

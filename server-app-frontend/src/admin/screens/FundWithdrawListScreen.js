@@ -20,9 +20,8 @@ import { ChevronRightIcon, SearchIcon } from '../components/AdminIcons';
 import { useAdmin } from '../context/AdminContext';
 import {
   formatWebAdminDateRangeLabel,
-  fetchApprovalQueue,
-  getDepositListNotes,
-  getDepositRemarks,
+  fetchWithdrawApprovalQueue,
+  getWithdrawListNotes,
   getDisplayReferenceNumber,
   isDefaultDepositDateRange,
 } from '../../services/adminApi';
@@ -33,9 +32,9 @@ import {
   matchesListTab,
   matchesStatusFilter,
   getStatusFilterLabel,
-  getDepositStatusSummary,
-  canUserActOnDeposit,
-} from '../constants/depositStatus';
+  getWithdrawStatusSummary,
+  canUserActOnWithdraw,
+} from '../constants/withdrawStatus';
 import { navigateToAdminScreen, navigateToAdminProfile } from '../utils/navigation';
 import { adminColors, adminShadow } from '../theme/adminTheme';
 import AdminSegmentedTabs from '../components/AdminSegmentedTabs';
@@ -62,34 +61,35 @@ const TABS = [
   { id: LIST_TABS.ADMIN, label: 'Super Admin' },
 ];
 
-const FundDepositListScreen = ({ navigation, route }) => {
+const FundWithdrawListScreen = ({ navigation, route }) => {
   const insets = useSafeAreaInsets();
   const {
-    deposits,
-    depositTotal,
-    depositDateRange,
-    statusFilter,
+    withdraws,
+    withdrawTotal,
+    withdrawDateRange,
+    withdrawStatusFilter,
     user,
     isManager,
     isAdmin,
     isSuperAdmin,
-    loadAdminData,
-    applyDepositFilters,
-    resetDepositFilters,
-    loadMoreDeposits,
-    hasMoreDeposits,
-    loadingMore,
-    refreshing,
-    error,
-    loading,
+    loadWithdrawData,
+    applyWithdrawFilters,
+    resetWithdrawFilters,
+    loadMoreWithdraws,
+    hasMoreWithdraws,
+    loadingMoreWithdraws,
+    refreshingWithdraws,
+    withdrawError,
+    loadingWithdraws,
   } = useAdmin();
   const embedded = route.params?.embedded;
   const initialTab = route.params?.initialTab || LIST_TABS.ALL;
   const [activeTab, setActiveTab] = useState(initialTab);
   const [search, setSearch] = useState(route.params?.q || '');
   const [filterOpen, setFilterOpen] = useState(false);
-  const [queueDeposits, setQueueDeposits] = useState([]);
+  const [queueWithdraws, setQueueWithdraws] = useState([]);
   const [queueLoading, setQueueLoading] = useState(false);
+
   const handleTabChange = useCallback(nextTab => {
     setActiveTab(prev => (prev === nextTab ? prev : nextTab));
   }, []);
@@ -102,10 +102,10 @@ const FundDepositListScreen = ({ navigation, route }) => {
     try {
       const workflow =
         activeTab === LIST_TABS.MANAGER ? 'pending_manager' : 'pending_admin';
-      const result = await fetchApprovalQueue(workflow);
-      setQueueDeposits(result.docs || []);
+      const result = await fetchWithdrawApprovalQueue(workflow);
+      setQueueWithdraws(result.docs || []);
     } catch {
-      setQueueDeposits([]);
+      setQueueWithdraws([]);
     } finally {
       setQueueLoading(false);
     }
@@ -119,119 +119,131 @@ const FundDepositListScreen = ({ navigation, route }) => {
 
   useFocusEffect(
     useCallback(() => {
-      loadAdminData({ silent: true });
+      loadWithdrawData({ silent: true });
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []),
   );
 
-  const dateRangeLabel = depositDateRange
-    ? formatWebAdminDateRangeLabel(depositDateRange)
+  const dateRangeLabel = withdrawDateRange
+    ? formatWebAdminDateRangeLabel(withdrawDateRange)
     : formatWebAdminDateRangeLabel();
 
-  const totalCount = onQueueTab ? queueDeposits.length : depositTotal || deposits.length;
-  const loadedCount = onQueueTab ? queueDeposits.length : deposits.length;
+  const totalCount = onQueueTab ? queueWithdraws.length : withdrawTotal || withdraws.length;
+  const loadedCount = onQueueTab ? queueWithdraws.length : withdraws.length;
   const hasActiveFilters =
-    statusFilter !== STATUS_FILTERS.ALL ||
-    (depositDateRange && !isDefaultDepositDateRange(depositDateRange));
+    withdrawStatusFilter !== STATUS_FILTERS.ALL ||
+    (withdrawDateRange && !isDefaultDepositDateRange(withdrawDateRange));
 
   const endReachedDuringMomentum = useRef(true);
 
   const handleEndReached = useCallback(() => {
-    if (onQueueTab || !hasMoreDeposits || loading || refreshing || loadingMore) return;
+    if (onQueueTab || !hasMoreWithdraws || loadingWithdraws || refreshingWithdraws || loadingMoreWithdraws) {
+      return;
+    }
     if (endReachedDuringMomentum.current) return;
-    loadMoreDeposits();
-  }, [onQueueTab, hasMoreDeposits, loading, refreshing, loadingMore, loadMoreDeposits]);
+    loadMoreWithdraws();
+  }, [
+    onQueueTab,
+    hasMoreWithdraws,
+    loadingWithdraws,
+    refreshingWithdraws,
+    loadingMoreWithdraws,
+    loadMoreWithdraws,
+  ]);
 
   const handleQuickStatus = useCallback(
     async nextStatus => {
-      const range = depositDateRange || { startDate: '', endDate: '' };
-      await applyDepositFilters({
+      const range = withdrawDateRange || { startDate: '', endDate: '' };
+      await applyWithdrawFilters({
         statusFilter: nextStatus,
         startDate: range.startDate,
         endDate: range.endDate,
       });
     },
-    [applyDepositFilters, depositDateRange],
+    [applyWithdrawFilters, withdrawDateRange],
   );
 
-  const sourceDeposits = onQueueTab ? queueDeposits : deposits;
+  const sourceWithdraws = onQueueTab ? queueWithdraws : withdraws;
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return sourceDeposits.filter(d => {
+    return sourceWithdraws.filter(d => {
       if (!onQueueTab) {
         if (!matchesListTab(d, activeTab)) return false;
-        if (!matchesStatusFilter(d, statusFilter)) return false;
+        if (!matchesStatusFilter(d, withdrawStatusFilter)) return false;
       }
       if (!q) return true;
       return (
-        d.userName.toLowerCase().includes(q) ||
-        d.referenceNumber.toLowerCase().includes(q) ||
+        (d.userName || '').toLowerCase().includes(q) ||
+        (d.referenceNumber || '').toLowerCase().includes(q) ||
         (d.email && d.email.toLowerCase().includes(q)) ||
         (d.paymentMethod && d.paymentMethod.toLowerCase().includes(q)) ||
-        getDepositRemarks(d).toLowerCase().includes(q) ||
-        String(d.description || '').toLowerCase().includes(q) ||
         String(d.comments || '').toLowerCase().includes(q) ||
-        String(d.dbStatus || '').toLowerCase().includes(q) ||
-        String(d.approveStatus || '').toLowerCase().includes(q)
+        String(d.description || '').toLowerCase().includes(q) ||
+        String(d.dbStatus || '').toLowerCase().includes(q)
       );
     });
-  }, [sourceDeposits, activeTab, onQueueTab, statusFilter, search]);
+  }, [sourceWithdraws, activeTab, onQueueTab, withdrawStatusFilter, search]);
 
-  const renderItem = useCallback(({ item }) => {
-    const canAct =
-      onQueueTab && canUserActOnDeposit(item, { isManager, isAdmin, isSuperAdmin });
-    const queueType =
-      activeTab === LIST_TABS.MANAGER ? 'pending_manager' : 'pending_admin';
-    const notes = getDepositListNotes(item);
+  const renderItem = useCallback(
+    ({ item }) => {
+      const canAct =
+        onQueueTab && canUserActOnWithdraw(item, { isManager, isAdmin, isSuperAdmin });
+      const queueType =
+        activeTab === LIST_TABS.MANAGER ? 'pending_manager' : 'pending_admin';
+      const notes = getWithdrawListNotes(item);
 
-    return (
-    <TouchableOpacity
-      style={styles.card}
-      onPress={() =>
-        canAct
-          ? navigateToAdminScreen(navigation, 'TakeAction', {
-              depositId: item.id,
-              deposit: item,
-              queueType,
-            })
-          : navigateToAdminScreen(navigation, 'DepositDetail', { depositId: item.id })
-      }
-      activeOpacity={0.85}>
-      <View style={styles.cardMain}>
-        <View style={styles.cardTop}>
-          <Text style={styles.name}>{item.userName}</Text>
-          <Text style={styles.amount}>{formatAmount(item.amountAed)}</Text>
-        </View>
-        <Text style={styles.ref}>
-          {getDisplayReferenceNumber(item)} · {formatDate(item.createdAt)}
-        </Text>
-        <Text style={styles.statusSummary}>{getDepositStatusSummary(item)}</Text>
-        {notes.map(note => (
-          <Text
-            key={note.label}
-            style={styles.listNote}
-            numberOfLines={1}
-            ellipsizeMode="tail">
-            {note.label}: {note.text}
-          </Text>
-        ))}
-        <View style={styles.cardBottom}>
-          <DepositStatusBadge status={item.status} compact />
-        </View>
-      </View>
-      <ChevronRightIcon />
-    </TouchableOpacity>
-    );
-  }, [activeTab, isAdmin, isManager, isSuperAdmin, navigation, onQueueTab]);
+      return (
+        <TouchableOpacity
+          style={styles.card}
+          onPress={() =>
+            canAct
+              ? navigateToAdminScreen(navigation, 'TakeWithdrawAction', {
+                  withdrawId: item.id,
+                  withdraw: item,
+                  queueType,
+                })
+              : navigateToAdminScreen(navigation, 'WithdrawDetail', {
+                  withdrawId: item.id,
+                })
+          }
+          activeOpacity={0.85}>
+          <View style={styles.cardMain}>
+            <View style={styles.cardTop}>
+              <Text style={styles.name}>{item.userName}</Text>
+              <Text style={styles.amount}>{formatAmount(item.amountAed)}</Text>
+            </View>
+            <Text style={styles.ref}>
+              {getDisplayReferenceNumber(item)} · {formatDate(item.createdAt)}
+            </Text>
+            <Text style={styles.statusSummary}>{getWithdrawStatusSummary(item)}</Text>
+            {notes.map(note => (
+              <Text
+                key={note.label}
+                style={styles.listNote}
+                numberOfLines={1}
+                ellipsizeMode="tail">
+                {note.label}: {note.text}
+              </Text>
+            ))}
+            <View style={styles.cardBottom}>
+              <DepositStatusBadge status={item.status} compact />
+            </View>
+          </View>
+          <ChevronRightIcon />
+        </TouchableOpacity>
+      );
+    },
+    [activeTab, isAdmin, isManager, isSuperAdmin, navigation, onQueueTab],
+  );
 
-  const emptyMessage = error
-    ? error
-    : loading || queueLoading
-      ? 'Loading deposits...'
+  const emptyMessage = withdrawError
+    ? withdrawError
+    : loadingWithdraws || queueLoading
+      ? 'Loading withdraws...'
       : activeTab === LIST_TABS.ALL
-        ? 'No fund deposits found.'
-        : 'No deposits in this queue. Try the All tab.';
+        ? 'No fund withdraws found.'
+        : 'No withdraws in this queue. Try the All tab.';
 
   return (
     <AdminScreenLayout>
@@ -239,21 +251,21 @@ const FundDepositListScreen = ({ navigation, route }) => {
         {embedded ? (
           <AdminHeader
             userName={user?.name}
-            title="Fund Deposits"
+            title="Fund Withdraws"
             compact
             onProfilePress={() => navigateToAdminProfile(navigation)}
           />
         ) : (
           <AdminHeader
             userName={user?.name}
-            title="Fund Deposits"
+            title="Fund Withdraws"
             onBack={() => navigation.goBack()}
             onProfilePress={() => navigateToAdminProfile(navigation)}
           />
         )}
 
         <View style={styles.typeBanner}>
-          <Text style={styles.typeBannerText}>Money in · Deposit requests only</Text>
+          <Text style={styles.typeBannerText}>Money out · Withdraw requests only</Text>
         </View>
 
         <View style={styles.tabWrap}>
@@ -283,16 +295,18 @@ const FundDepositListScreen = ({ navigation, route }) => {
             : search.trim() || hasActiveFilters
               ? `Showing ${filtered.length} · loaded ${loadedCount} of ${totalCount}`
               : `Showing ${Math.min(filtered.length, loadedCount)} of ${totalCount} · ${dateRangeLabel}`}
-          {!onQueueTab && hasActiveFilters ? ` · ${getStatusFilterLabel(statusFilter)}` : ''}
+          {!onQueueTab && hasActiveFilters
+            ? ` · ${getStatusFilterLabel(withdrawStatusFilter)}`
+            : ''}
         </Text>
 
         {!onQueueTab ? (
           <DepositFilterBar
-            statusFilter={statusFilter}
-            depositDateRange={depositDateRange}
+            statusFilter={withdrawStatusFilter}
+            depositDateRange={withdrawDateRange}
             onStatusChange={handleQuickStatus}
             onOpenFilters={() => setFilterOpen(true)}
-            onClearFilters={resetDepositFilters}
+            onClearFilters={resetWithdrawFilters}
           />
         ) : null}
 
@@ -309,10 +323,10 @@ const FundDepositListScreen = ({ navigation, route }) => {
           </View>
         </View>
 
-        {error ? (
+        {withdrawError ? (
           <View style={styles.errorBox}>
-            <Text style={styles.errorText}>{error}</Text>
-            <TouchableOpacity onPress={() => loadAdminData({ force: true })}>
+            <Text style={styles.errorText}>{withdrawError}</Text>
+            <TouchableOpacity onPress={() => loadWithdrawData({ force: true })}>
               <Text style={styles.retryText}>Tap to retry</Text>
             </TouchableOpacity>
           </View>
@@ -322,10 +336,10 @@ const FundDepositListScreen = ({ navigation, route }) => {
       <DepositFilterDrawer
         visible={filterOpen}
         onClose={() => setFilterOpen(false)}
-        initialStatusFilter={statusFilter}
-        initialDateRange={depositDateRange}
-        onApply={applyDepositFilters}
-        onReset={resetDepositFilters}
+        initialStatusFilter={withdrawStatusFilter}
+        initialDateRange={withdrawDateRange}
+        onApply={applyWithdrawFilters}
+        onReset={resetWithdrawFilters}
       />
 
       <FlatList
@@ -333,11 +347,6 @@ const FundDepositListScreen = ({ navigation, route }) => {
         data={filtered}
         keyExtractor={item => item.id}
         renderItem={renderItem}
-        removeClippedSubviews
-        windowSize={7}
-        maxToRenderPerBatch={10}
-        updateCellsBatchingPeriod={40}
-        initialNumToRender={8}
         onEndReached={handleEndReached}
         onEndReachedThreshold={0.35}
         onMomentumScrollBegin={() => {
@@ -348,12 +357,12 @@ const FundDepositListScreen = ({ navigation, route }) => {
         }}
         refreshControl={
           <RefreshControl
-            refreshing={onQueueTab ? queueLoading : refreshing}
+            refreshing={onQueueTab ? queueLoading : refreshingWithdraws}
             onRefresh={() => {
               if (onQueueTab) {
                 loadQueue();
               } else {
-                loadAdminData({ silent: true, force: true });
+                loadWithdrawData({ silent: true, force: true });
               }
             }}
             tintColor={adminColors.gold}
@@ -364,14 +373,14 @@ const FundDepositListScreen = ({ navigation, route }) => {
           { paddingBottom: embedded ? getAdminTabBarPadding(insets) : insets.bottom + 16 },
         ]}
         ListEmptyComponent={
-          <Text style={[styles.empty, error && styles.emptyError]}>{emptyMessage}</Text>
+          <Text style={[styles.empty, withdrawError && styles.emptyError]}>{emptyMessage}</Text>
         }
         ListFooterComponent={
-          !onQueueTab && loadingMore ? (
+          !onQueueTab && loadingMoreWithdraws ? (
             <View style={styles.footerLoader}>
               <ActivityIndicator color={adminColors.gold} size="small" />
             </View>
-          ) : !onQueueTab && loadedCount > 0 && !hasMoreDeposits ? (
+          ) : !onQueueTab && loadedCount > 0 && !hasMoreWithdraws ? (
             <Text style={styles.allLoadedText}>All {totalCount} records loaded</Text>
           ) : null
         }
@@ -381,9 +390,7 @@ const FundDepositListScreen = ({ navigation, route }) => {
 };
 
 const styles = StyleSheet.create({
-  topSection: {
-    flexShrink: 0,
-  },
+  topSection: { flexShrink: 0 },
   typeBanner: {
     marginHorizontal: 16,
     marginTop: 10,
@@ -391,24 +398,18 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 10,
-    backgroundColor: 'rgba(52, 211, 153, 0.12)',
+    backgroundColor: 'rgba(251, 146, 60, 0.12)',
     borderWidth: 1,
-    borderColor: 'rgba(52, 211, 153, 0.28)',
+    borderColor: 'rgba(251, 146, 60, 0.28)',
   },
   typeBannerText: {
-    color: '#34D399',
+    color: '#FB923C',
     fontSize: 12,
     fontWeight: '700',
     textAlign: 'center',
   },
-  listFlex: {
-    flex: 1,
-  },
-  tabWrap: {
-    marginHorizontal: 16,
-    marginBottom: 8,
-    marginTop: 12,
-  },
+  listFlex: { flex: 1 },
+  tabWrap: { marginHorizontal: 16, marginBottom: 8, marginTop: 12 },
   countLine: {
     color: adminColors.textMuted,
     fontSize: 11,
@@ -447,20 +448,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(248, 113, 113, 0.35)',
   },
-  errorText: {
-    color: '#F87171',
-    fontSize: 13,
-    lineHeight: 18,
-  },
+  errorText: { color: '#F87171', fontSize: 13, lineHeight: 18 },
   retryText: {
     color: adminColors.gold,
     fontSize: 13,
     fontWeight: '700',
     marginTop: 8,
   },
-  list: {
-    paddingHorizontal: 16,
-  },
+  list: { paddingHorizontal: 16 },
   card: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -473,9 +468,7 @@ const styles = StyleSheet.create({
     gap: 8,
     ...adminShadow,
   },
-  cardMain: {
-    flex: 1,
-  },
+  cardMain: { flex: 1 },
   cardTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -494,11 +487,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '800',
   },
-  ref: {
-    color: adminColors.textMuted,
-    fontSize: 11,
-    marginBottom: 4,
-  },
+  ref: { color: adminColors.textMuted, fontSize: 11, marginBottom: 4 },
   statusSummary: {
     color: adminColors.textSecondary,
     fontSize: 12,
@@ -513,9 +502,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     flexShrink: 1,
   },
-  cardBottom: {
-    flexDirection: 'row',
-  },
+  cardBottom: { flexDirection: 'row' },
   empty: {
     color: adminColors.textMuted,
     textAlign: 'center',
@@ -524,13 +511,8 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     paddingHorizontal: 12,
   },
-  emptyError: {
-    color: '#F87171',
-  },
-  footerLoader: {
-    paddingVertical: 20,
-    alignItems: 'center',
-  },
+  emptyError: { color: '#F87171' },
+  footerLoader: { paddingVertical: 20, alignItems: 'center' },
   allLoadedText: {
     color: adminColors.textDim,
     fontSize: 12,
@@ -539,4 +521,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default FundDepositListScreen;
+export default FundWithdrawListScreen;

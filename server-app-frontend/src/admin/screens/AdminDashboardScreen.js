@@ -102,6 +102,8 @@ const AdminDashboardScreen = ({ navigation }) => {
     stats,
     deposits,
     depositTotal,
+    withdrawTotal,
+    withdraws,
     depositDateRange,
     statusFilter,
     loadAdminData,
@@ -199,7 +201,7 @@ const AdminDashboardScreen = ({ navigation }) => {
             </View>
           </View>
 
-          {stats.totalPending > 0 ? (
+          {(stats.combinedTotalPending || stats.totalPending) > 0 ? (
             <TouchableOpacity
               style={styles.primaryCta}
               activeOpacity={0.9}
@@ -211,7 +213,9 @@ const AdminDashboardScreen = ({ navigation }) => {
                 <View>
                   <Text style={styles.primaryCtaTitle}>Review pending approvals</Text>
                   <Text style={styles.primaryCtaSub}>
-                    {stats.totalPending} request{stats.totalPending === 1 ? '' : 's'} need your attention
+                    {stats.combinedTotalPending || stats.totalPending} request
+                    {(stats.combinedTotalPending || stats.totalPending) === 1 ? '' : 's'} need your
+                    attention
                   </Text>
                 </View>
               </View>
@@ -229,7 +233,7 @@ const AdminDashboardScreen = ({ navigation }) => {
         <View style={styles.statsRow}>
           <StatCard
             label="Pending"
-            value={stats.totalPending}
+            value={stats.combinedTotalPending || stats.totalPending}
             accent={{
               bg: 'rgba(34, 197, 94, 0.12)',
               border: 'rgba(74, 222, 128, 0.28)',
@@ -239,7 +243,7 @@ const AdminDashboardScreen = ({ navigation }) => {
           />
           <StatCard
             label="Admin"
-            value={stats.pendingManager}
+            value={(stats.pendingManager || 0) + (stats.withdrawPendingManager || 0)}
             accent={{
               bg: 'rgba(212, 175, 55, 0.1)',
               border: 'rgba(212, 175, 55, 0.28)',
@@ -249,7 +253,7 @@ const AdminDashboardScreen = ({ navigation }) => {
           />
           <StatCard
             label="Super Admin"
-            value={stats.pendingAdmin}
+            value={(stats.pendingAdmin || 0) + (stats.withdrawPendingAdmin || 0)}
             accent={{
               bg: 'rgba(74, 111, 165, 0.15)',
               border: 'rgba(96, 165, 250, 0.28)',
@@ -320,10 +324,26 @@ const AdminDashboardScreen = ({ navigation }) => {
           />
           <View style={styles.quickLinkDivider} />
           <QuickLink
+            icon={<DepositsIcon focused size={20} />}
+            title="All fund withdraws"
+            subtitle="Browse the full withdraw list"
+            count={withdrawTotal || (withdraws && withdraws.length) || 0}
+            accent={{
+              bg: 'rgba(249, 115, 22, 0.12)',
+              border: 'rgba(251, 146, 60, 0.25)',
+              icon: '#FB923C',
+              badgeBg: 'rgba(249, 115, 22, 0.15)',
+            }}
+            onPress={() =>
+              navigateToAdminScreen(navigation, 'FundWithdrawList', { initialTab: 'all' })
+            }
+          />
+          <View style={styles.quickLinkDivider} />
+          <QuickLink
             icon={<ApprovalsIcon focused size={20} />}
             title={`${APPROVAL_STAGE_LABELS.ADMIN} approvals`}
             subtitle={`Requests waiting for ${APPROVAL_STAGE_LABELS.ADMIN.toLowerCase()} review`}
-            count={stats.pendingManager}
+            count={(stats.pendingManager || 0) + (stats.withdrawPendingManager || 0)}
             accent={{
               bg: 'rgba(34, 197, 94, 0.12)',
               border: 'rgba(74, 222, 128, 0.25)',
@@ -337,7 +357,7 @@ const AdminDashboardScreen = ({ navigation }) => {
             icon={<ShieldIcon color="#93C5FD" size={20} />}
             title={`${APPROVAL_STAGE_LABELS.SUPER_ADMIN} approvals`}
             subtitle={`Requests waiting for ${APPROVAL_STAGE_LABELS.SUPER_ADMIN.toLowerCase()} sign-off`}
-            count={stats.pendingAdmin}
+            count={(stats.pendingAdmin || 0) + (stats.withdrawPendingAdmin || 0)}
             accent={{
               bg: 'rgba(74, 111, 165, 0.15)',
               border: 'rgba(96, 165, 250, 0.25)',

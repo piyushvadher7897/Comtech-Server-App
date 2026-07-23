@@ -1,13 +1,13 @@
 export const getDepositNotificationErrorMessage = result => {
   const messages = {
     permission_denied:
-      'Allow notifications when your phone asks, or turn them on in Settings, then tap the button again.',
-    not_logged_in: 'Please sign in to the Admin side first.',
+      'Allow notifications when your phone asks, or turn them on in Settings, then try again.',
+    not_logged_in: 'Please sign in to Admin first.',
     no_fcm_token:
       'Push service is not ready. Close the app, reopen it, and try again.',
     api_error:
       result?.message ||
-      'Could not register with the admin server. Check your connection and try again.',
+      'Could not register alerts with the server. Check your connection and try again.',
     error: result?.message || 'Something went wrong. Please try again.',
   };
 
@@ -15,15 +15,20 @@ export const getDepositNotificationErrorMessage = result => {
 };
 
 export const DEPOSIT_NOTIFICATION_SUCCESS = {
-  title: 'Deposit alerts are on',
+  title: 'Alerts are on',
   message:
-    'You will receive a push notification when a user submits a new fund deposit. Tap the alert to review it.',
+    "You'll get a push when a user submits a new fund deposit or withdraw. Tap the alert to review and approve it.",
+};
+
+export const DEPOSIT_NOTIFICATION_OFF = {
+  title: 'Alerts are off',
+  messageSuffix: 'You can turn them on anytime from Home or Profile.',
 };
 
 export const DEPOSIT_NOTIFICATION_PROMPT = {
-  title: 'Turn on deposit alerts?',
+  title: 'Turn on approval alerts?',
   message:
-    'Stay updated when users submit fund deposits. We will ask for notification permission on the next step.',
+    "Get notified for new fund deposits and withdraws so you can review them quickly. We'll ask for notification permission next.",
   enableText: 'Turn on alerts',
   laterText: 'Not now',
 };
