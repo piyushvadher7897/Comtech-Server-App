@@ -46,6 +46,12 @@ const formatDate = iso => {
   });
 };
 
+const resolveRecordUserId = userID => {
+  if (!userID) return '';
+  if (typeof userID === 'object') return String(userID._id || userID.id || '');
+  return String(userID);
+};
+
 const WithdrawDetailScreen = ({ navigation, route }) => {
   const insets = useSafeAreaInsets();
   const { withdraws, isManager, isAdmin, isSuperAdmin, getWithdrawById } = useAdmin();
@@ -97,12 +103,20 @@ const WithdrawDetailScreen = ({ navigation, route }) => {
 
   const canTakeAction = canUserActOnWithdraw(withdraw, { isManager, isAdmin, isSuperAdmin });
   const bank = withdraw.bank || {};
+  const userId = resolveRecordUserId(withdraw.userID);
   const statusLabel =
     withdraw.status === WITHDRAW_STATUS.PENDING_MANAGER
       ? APPROVAL_STAGE_LABELS.PENDING_ADMIN
       : withdraw.status === WITHDRAW_STATUS.PENDING_ADMIN
         ? APPROVAL_STAGE_LABELS.PENDING_SUPER_ADMIN
         : null;
+
+  const openUserList = () =>
+    navigateToAdminScreen(navigation, 'UserList', {
+      userId: userId || undefined,
+      userName: withdraw.userName,
+      email: withdraw.email,
+    });
 
   return (
     <AdminScreenLayout>
@@ -169,8 +183,14 @@ const WithdrawDetailScreen = ({ navigation, route }) => {
         </View>
       </ScrollView>
 
-      {canTakeAction ? (
-        <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+        <GoldButton
+          title="VIEW USER"
+          variant="outline"
+          onPress={openUserList}
+          style={canTakeAction ? styles.viewUserBtn : undefined}
+        />
+        {canTakeAction ? (
           <GoldButton
             title="TAKE ACTION"
             onPress={() =>
@@ -184,8 +204,8 @@ const WithdrawDetailScreen = ({ navigation, route }) => {
               })
             }
           />
-        </View>
-      ) : null}
+        ) : null}
+      </View>
     </AdminScreenLayout>
   );
 };
@@ -258,6 +278,7 @@ const styles = StyleSheet.create({
     zIndex: 20,
     elevation: 12,
   },
+  viewUserBtn: { marginBottom: 10 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   missing: { color: adminColors.textMuted, fontSize: 16 },
 });

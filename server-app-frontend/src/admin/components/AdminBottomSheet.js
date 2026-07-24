@@ -24,15 +24,19 @@ const AdminBottomSheet = ({ visible, onClose, title, subtitle, children }) => {
 
   useEffect(() => {
     if (visible) {
+      slideY.setValue(SHEET_MAX);
+      fade.setValue(0);
       Animated.parallel([
-        Animated.timing(slideY, {
+        Animated.spring(slideY, {
           toValue: 0,
-          duration: 240,
           useNativeDriver: true,
+          damping: 22,
+          stiffness: 260,
+          mass: 0.7,
         }),
         Animated.timing(fade, {
           toValue: 1,
-          duration: 200,
+          duration: 120,
           useNativeDriver: true,
         }),
       ]).start();

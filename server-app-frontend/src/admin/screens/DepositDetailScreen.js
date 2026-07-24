@@ -42,6 +42,12 @@ const formatDate = iso => {
   });
 };
 
+const resolveRecordUserId = userID => {
+  if (!userID) return '';
+  if (typeof userID === 'object') return String(userID._id || userID.id || '');
+  return String(userID);
+};
+
 const DepositDetailScreen = ({ navigation, route }) => {
   const insets = useSafeAreaInsets();
   const { deposits, user, isManager, isAdmin, isSuperAdmin, getDepositById } = useAdmin();
@@ -93,6 +99,7 @@ const DepositDetailScreen = ({ navigation, route }) => {
 
   const canTakeAction = canUserActOnDeposit(deposit, { isManager, isAdmin, isSuperAdmin });
   const remarks = getDepositRemarks(deposit);
+  const userId = resolveRecordUserId(deposit.userID);
 
   const statusLabel =
     deposit.status === DEPOSIT_STATUS.PENDING_MANAGER
@@ -100,6 +107,13 @@ const DepositDetailScreen = ({ navigation, route }) => {
       : deposit.status === DEPOSIT_STATUS.PENDING_ADMIN
         ? APPROVAL_STAGE_LABELS.PENDING_SUPER_ADMIN
         : null;
+
+  const openUserList = () =>
+    navigateToAdminScreen(navigation, 'UserList', {
+      userId: userId || undefined,
+      userName: deposit.userName,
+      email: deposit.email,
+    });
 
   return (
     <AdminScreenLayout>
@@ -194,8 +208,14 @@ const DepositDetailScreen = ({ navigation, route }) => {
         </View>
       </ScrollView>
 
-      {canTakeAction ? (
-        <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+        <GoldButton
+          title="VIEW USER"
+          variant="outline"
+          onPress={openUserList}
+          style={canTakeAction ? styles.viewUserBtn : undefined}
+        />
+        {canTakeAction ? (
           <GoldButton
             title="TAKE ACTION"
             onPress={() =>
@@ -209,8 +229,8 @@ const DepositDetailScreen = ({ navigation, route }) => {
               })
             }
           />
-        </View>
-      ) : null}
+        ) : null}
+      </View>
     </AdminScreenLayout>
   );
 };
@@ -286,6 +306,7 @@ const styles = StyleSheet.create({
     zIndex: 20,
     elevation: 12,
   },
+  viewUserBtn: { marginBottom: 10 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   missing: { color: adminColors.textMuted, fontSize: 16 },
 });

@@ -31,6 +31,7 @@ export const Shoket_URL = SERVER_SOCKET_PROD;
 //   __DEV__ || ADMIN_USE_REMOTE_TEST ? getLocalAdminUrl() : ADMIN_PROD_URL;
 // export const ADMIN_APP_URL = ADMIN_PROD_URL;
 export const ADMIN_APP_URL = getLocalAdminUrl();
+console.log('ADMIN_APP_URL', ADMIN_APP_URL);
 
 // Sent on all Admin Side API calls so backend can:
 // 1) identify this as the internal Server App

@@ -26,11 +26,14 @@ import {
 } from '../../services/adminLookupApi';
 import { adminColors, adminShadow, getInitials } from '../theme/adminTheme';
 
-const UserListScreen = ({ navigation }) => {
+const UserListScreen = ({ navigation, route }) => {
   const insets = useSafeAreaInsets();
   const { user } = useAdmin();
-  const [search, setSearch] = useState('');
-  const [query, setQuery] = useState('');
+  const paramUserId = route.params?.userId;
+  const paramEmail = route.params?.email;
+  const paramUserName = route.params?.userName;
+  const [search, setSearch] = useState(paramEmail || '');
+  const [query, setQuery] = useState(paramEmail ? String(paramEmail).trim() : '');
   const [docs, setDocs] = useState([]);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
@@ -44,6 +47,7 @@ const UserListScreen = ({ navigation }) => {
   const [detailLoading, setDetailLoading] = useState(false);
   const searchTimer = useRef(null);
   const endMomentum = useRef(true);
+  const openedParamUser = useRef(null);
 
   const loadPage = useCallback(async ({ page: nextPage = 1, q = query, append = false, silent = false } = {}) => {
     if (append) setLoadingMore(true);
@@ -97,6 +101,33 @@ const UserListScreen = ({ navigation }) => {
       setDetailLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (!paramUserId || openedParamUser.current === paramUserId) return;
+    openedParamUser.current = paramUserId;
+    let active = true;
+    const stub = {
+      id: String(paramUserId),
+      name: paramUserName || 'User',
+      email: paramEmail || '',
+    };
+    setSelected(stub);
+    setDetail(null);
+    setDetailLoading(true);
+    (async () => {
+      try {
+        const full = await fetchUserDetail(stub.id);
+        if (active) setDetail(full);
+      } catch {
+        if (active) setDetail(stub);
+      } finally {
+        if (active) setDetailLoading(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [paramUserId, paramUserName, paramEmail]);
 
   const closeSheet = () => {
     setSelected(null);
@@ -202,9 +233,7 @@ const UserListScreen = ({ navigation }) => {
         onClose={closeSheet}
         title={(sheetUser && sheetUser.name) || 'User'}
         subtitle={(sheetUser && sheetUser.email) || ''}>
-        {detailLoading ? (
-          <ActivityIndicator color={adminColors.gold} style={{ marginVertical: 24 }} />
-        ) : sheetUser ? (
+        {sheetUser ? (
           <>
             <SheetRow label="Name" value={sheetUser.name} />
             <SheetRow label="Email" value={sheetUser.email} />
@@ -223,7 +252,9 @@ const UserListScreen = ({ navigation }) => {
             />
             <SheetRow label="KYC" value={sheetUser.kycStatus || '—'} />
             <SheetRow label="Joined" value={formatListDate(sheetUser.createdAt)} />
-            {detail ? (
+            {detailLoading ? (
+              <ActivityIndicator color={adminColors.gold} style={{ marginVertical: 12 }} />
+            ) : detail ? (
               <>
                 <SheetRow label="Deposits" value={String(detail.depositCount || 0)} />
                 <SheetRow label="Withdraws" value={String(detail.withdrawCount || 0)} />
