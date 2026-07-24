@@ -45,6 +45,17 @@ const ADMIN_OPTIONS = [
   { id: 'Rejected', label: 'Reject', hint: 'Cancel and unlock user funds' },
 ];
 
+const PAYMENT_VIA_OPTIONS = [
+  { id: 'Bank Transfer', label: 'Bank Transfer' },
+  { id: 'Online Transfer', label: 'Online Transfer' },
+  { id: 'Reject', label: 'Reject' },
+];
+
+const isEmptyPaymentVia = value => {
+  const trimmed = String(value || '').trim();
+  return !trimmed || trimmed === 'Select Payment Method';
+};
+
 const resolveStage = (withdraw, queueType) => {
   if (queueType === 'pending_manager') return 'manager';
   if (queueType === 'pending_admin') return 'admin';
@@ -70,6 +81,7 @@ const TakeWithdrawActionScreen = ({ navigation, route }) => {
   const [selected, setSelected] = useState(actionOptions[0]?.id || 'Approved');
   const [remarks, setRemarks] = useState('');
   const [referenceNumber, setReferenceNumber] = useState('');
+  const [paymentVia, setPaymentVia] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
   const maxRemarks = 250;
   const [submitting, setSubmitting] = useState(false);
@@ -103,6 +115,7 @@ const TakeWithdrawActionScreen = ({ navigation, route }) => {
       const opts = resolveStage(withdraw, queueType) === 'manager' ? MANAGER_OPTIONS : ADMIN_OPTIONS;
       setSelected(opts[0].id);
       setReferenceNumber(getEditableReferenceNumber(withdraw));
+      setPaymentVia(withdraw.paymentMethod || withdraw.paymentVia || '');
       setFieldErrors({});
     }
   }, [withdraw && withdraw.id, withdraw && withdraw.dbStatus, withdraw && withdraw.approveStatus, queueType]);
@@ -111,6 +124,21 @@ const TakeWithdrawActionScreen = ({ navigation, route }) => {
     const nextErrors = {};
     if (selected === 'Approved' && isEmptyDepositReference(referenceNumber)) {
       nextErrors.referenceNumber = 'Please enter the reference number';
+    }
+    if (selected === 'Approved' && isEmptyPaymentVia(paymentVia)) {
+      nextErrors.paymentVia = 'Please select payment method';
+    }
+    setFieldErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
+  };
+
+  const validateAdminFields = () => {
+    const nextErrors = {};
+    if (selected === 'Approved' && isEmptyPaymentVia(paymentVia)) {
+      nextErrors.paymentVia = 'Payment method is required before approve';
+    }
+    if (!selected) {
+      nextErrors.status = 'Please select payment status';
     }
     setFieldErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
@@ -170,11 +198,15 @@ const TakeWithdrawActionScreen = ({ navigation, route }) => {
     if (isManagerStage && selected === 'Approved' && !validateManagerFields()) {
       return;
     }
+    if (isAdminStage && selected === 'Approved' && !validateAdminFields()) {
+      return;
+    }
     setSubmitting(true);
     try {
       const result = await submitWithdrawAction(withdraw, selected, remarks, {
         stage: isManagerStage ? 'manager' : 'admin',
         refNo: referenceNumber.trim(),
+        paymentVia: paymentVia.trim(),
       });
       if (!result || !result.success) {
         setSubmitError((result && result.message) || 'Action failed. Please try again.');
@@ -263,12 +295,71 @@ const TakeWithdrawActionScreen = ({ navigation, route }) => {
               {fieldErrors.referenceNumber ? (
                 <Text style={styles.fieldError}>{fieldErrors.referenceNumber}</Text>
               ) : null}
+
+              <Text style={styles.sectionTitle}>Payment Via *</Text>
+              {PAYMENT_VIA_OPTIONS.map(opt => (
+                <TouchableOpacity
+                  key={opt.id}
+                  style={[styles.option, paymentVia === opt.id && styles.optionSelected]}
+                  onPress={() => {
+                    setPaymentVia(opt.id);
+                    if (fieldErrors.paymentVia) {
+                      setFieldErrors(prev => ({ ...prev, paymentVia: undefined }));
+                    }
+                  }}
+                  activeOpacity={0.85}>
+                  <View style={[styles.radio, paymentVia === opt.id && styles.radioOn]}>
+                    {paymentVia === opt.id ? <View style={styles.radioDot} /> : null}
+                  </View>
+                  <View style={styles.optionText}>
+                    <Text style={styles.optionLabel}>{opt.label}</Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+              {fieldErrors.paymentVia ? (
+                <Text style={styles.fieldError}>{fieldErrors.paymentVia}</Text>
+              ) : null}
             </>
           ) : (
-            <View style={styles.readOnlyBlock}>
-              <Text style={styles.readOnlyLabel}>Reference Number</Text>
-              <Text style={styles.readOnlyValue}>{getDisplayReferenceNumber(withdraw)}</Text>
-            </View>
+            <>
+              <View style={styles.readOnlyBlock}>
+                <Text style={styles.readOnlyLabel}>Reference Number</Text>
+                <Text style={styles.readOnlyValue}>{getDisplayReferenceNumber(withdraw)}</Text>
+              </View>
+
+              {isEmptyPaymentVia(paymentVia) ? (
+                <>
+                  <Text style={styles.sectionTitle}>Payment Via *</Text>
+                  {PAYMENT_VIA_OPTIONS.map(opt => (
+                    <TouchableOpacity
+                      key={opt.id}
+                      style={[styles.option, paymentVia === opt.id && styles.optionSelected]}
+                      onPress={() => {
+                        setPaymentVia(opt.id);
+                        if (fieldErrors.paymentVia) {
+                          setFieldErrors(prev => ({ ...prev, paymentVia: undefined }));
+                        }
+                      }}
+                      activeOpacity={0.85}>
+                      <View style={[styles.radio, paymentVia === opt.id && styles.radioOn]}>
+                        {paymentVia === opt.id ? <View style={styles.radioDot} /> : null}
+                      </View>
+                      <View style={styles.optionText}>
+                        <Text style={styles.optionLabel}>{opt.label}</Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                  {fieldErrors.paymentVia ? (
+                    <Text style={styles.fieldError}>{fieldErrors.paymentVia}</Text>
+                  ) : null}
+                </>
+              ) : (
+                <View style={styles.readOnlyBlock}>
+                  <Text style={styles.readOnlyLabel}>Payment Via</Text>
+                  <Text style={styles.readOnlyValue}>{paymentVia}</Text>
+                </View>
+              )}
+            </>
           )}
 
           <Text style={styles.sectionTitle}>Select Action</Text>

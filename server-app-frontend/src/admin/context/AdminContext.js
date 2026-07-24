@@ -32,6 +32,7 @@ import {
   mapBackendWithdraw,
   isMissingWithdrawProfile,
   WITHDRAW_LIST_PAGE_SIZE,
+  isSuperAdminRoleName,
 } from '../../services/adminApi';
 import {
   ADMIN_SESSION_KEY,
@@ -456,7 +457,7 @@ export const AdminProvider = ({ children }) => {
         name: data.payload?.name || pendingLogin.name,
         role,
         roleName,
-        isSuperAdmin: roleName.toUpperCase() === 'SUPERADMIN',
+        isSuperAdmin: isSuperAdminRoleName(roleName),
         token: data.token,
       };
       await persistSession(session);

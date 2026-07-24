@@ -410,7 +410,9 @@ export const buildManagerActionPayload = (deposit, selectedStatus, comments) => 
 
 export const resolveApprovalRole = payload => {
   const roleName = (payload?.role?.name || payload?.name || '').toLowerCase();
-  if (roleName.includes('superadmin')) return USER_ROLES.ADMIN;
+  if (roleName.includes('superadmin') || roleName.includes('superuser') || roleName.includes('super admin')) {
+    return USER_ROLES.ADMIN;
+  }
   if (roleName.includes('manager')) return USER_ROLES.MANAGER;
   if (roleName.includes('admin')) return USER_ROLES.ADMIN;
   const perms = payload?.permission || [];
@@ -419,6 +421,13 @@ export const resolveApprovalRole = payload => {
   );
   return hasAdminPerm ? USER_ROLES.ADMIN : USER_ROLES.MANAGER;
 };
+
+const isSuperAdminRoleName = roleName => {
+  const upper = String(roleName || '').trim().toUpperCase();
+  return upper === 'SUPERADMIN' || upper === 'SUPERUSER' || upper.includes('SUPER ADMIN');
+};
+
+export { isSuperAdminRoleName };
 
 export const adminLogin = async (email, password) => {
   const { data } = await api.post(`${APP_ADMIN_BASE}/auth/login`, { email, password });
