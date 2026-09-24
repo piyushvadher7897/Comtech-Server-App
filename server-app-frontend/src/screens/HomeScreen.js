@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -11,9 +11,9 @@ import {
   StatusBar,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import ServerStatus from '../screens/ServerStatus';
-import { SERVER_APP_URL } from '../global/constant';
-import { io } from 'socket.io-client';
+import { getPriceSocket, syncPriceSocketAuth } from '../services/priceSocket';
 import GoldCard, { GoldLabel, GoldMeta, GoldValue } from '../components/GoldCard';
 import { GoldBarsIcon, BalanceScaleIcon, PriceIconBadge } from '../components/PriceIcons';
 import { colors, cardShadow } from '../theme/theme';
@@ -25,8 +25,6 @@ import {
   pickPriceUpdatedAt,
   formatPriceUpdatedLabel,
 } from '../utils/priceDisplay';
-
-const socket = io(SERVER_APP_URL);
 
 const DifferenceCard = ({ value, variant }) => {
   const isLoading = variant === 'loading';
@@ -67,7 +65,7 @@ const HomeScreen = ({ navigation }) => {
 
   const onRefresh = () => {
     setRefreshing(true);
-    socket.emit('getprice');
+    getPriceSocket().emit('getprice');
     if (serverStatusRef.current) {
       serverStatusRef.current();
     }
@@ -75,6 +73,7 @@ const HomeScreen = ({ navigation }) => {
   };
 
   useEffect(() => {
+    const socket = getPriceSocket();
     socket.emit('getprice');
     const updatePrice = data => {
       setIsMarket(data.isMarket);
@@ -86,6 +85,12 @@ const HomeScreen = ({ navigation }) => {
     socket.on('getpriceUpdate', updatePrice);
     return () => socket.off('getpriceUpdate', updatePrice);
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      syncPriceSocketAuth();
+    }, []),
+  );
 
   if (isValidDisplayPrice(price.price)) {
     lastValidStoneX.current = price.price;
