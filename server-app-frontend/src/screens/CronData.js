@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, StyleSheet, ImageBackground } from "react-native";
 import axios from "axios";
 import moment from "moment";
+import { SERVER_APP_URL } from "../global/constant";
 
 const CronData = () => {
   const [data, setData] = useState([]);
@@ -14,7 +15,7 @@ const CronData = () => {
   const fetchCronData = async (reset = false) => {
     try {
       setLoading(true);
-      const res = await axios.get(`http://192.168.1.3:5001/api/weekendorder/weekend-orders`, {
+      const res = await axios.get(`${SERVER_APP_URL}/api/weekendorder/weekend-orders`, {
         params: { month, year, page, limit: 10 },
       });
 

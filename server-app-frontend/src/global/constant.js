@@ -1,14 +1,17 @@
 // ─── Server Side tab (prices, socket, server status, notifications) ───
 // Always production — independent of Admin Side local dev settings.
-const SERVER_PROD_URL = 'https://appapi.comtechgold.com';
-const SERVER_SOCKET_PROD = 'ws://78.129.235.51:5080';
+// const SERVER_PROD_URL = 'https://appapi.comtechgold.com';
+const SERVER_PROD_URL = 'http://192.168.1.7:5060';
+// const SERVER_SOCKET_PROD = 'ws://78.129.235.51:5080';
+const SERVER_SOCKET_LOCAL = 'ws://192.168.1.7:5081';
 
 // ─── Admin Side tab (fund deposit approval — /api/appadmin/*) ───
 const ADMIN_PROD_URL = 'https://appapi.comtechgold.com';
 const ADMIN_LOCAL_PORT = 5056; // match cgoldBack_new_transform/envs/local.env PORT
 
 // Set Mac LAN IP when testing admin on a physical phone (e.g. '192.168.1.42')
-const ADMIN_LOCAL_HOST = null;
+// const ADMIN_LOCAL_HOST = null;
+const ADMIN_LOCAL_HOST = '192.168.1.7';
 
 // true = release APK also uses http://78.129.235.52:5056 for admin APIs.
 // false = release APK uses https://appapi.comtechgold.com
@@ -24,7 +27,7 @@ const getLocalAdminUrl = () => {
 
 // Server Side — always uses production/remote backend (prices, status socket, notifications)
 export const SERVER_APP_URL = SERVER_PROD_URL;
-export const Shoket_URL = SERVER_SOCKET_PROD;
+export const Shoket_URL = SERVER_SOCKET_LOCAL;
 
 // Admin Side — remote test server in dev + release (when ADMIN_USE_REMOTE_TEST), else production
 // export const ADMIN_APP_URL =

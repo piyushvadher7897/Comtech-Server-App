@@ -212,7 +212,7 @@ const HomeScreen = ({ navigation }) => {
             <ServerStatus
               setExternalRefresh={fn => (serverStatusRef.current = fn)}
               refreshingParent={refreshing}
-              ismarket={ismarket}
+              ismarket={ismarket || (price.price > 0 && !price.loading)}
               navigation={navigation}
             />
 
